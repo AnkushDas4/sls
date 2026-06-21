@@ -1,52 +1,70 @@
 package com.sednium.localspaces.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.staticCompositionLocalOf
 
-private val DarkColorScheme =
-  darkColorScheme(primary = Purple80, secondary = PurpleGrey80, tertiary = Pink80)
+/**
+ * The original app actually pins `isDark = false` and forces the light
+ * "sedYellow / sedRed" palette everywhere (see App.tsx:359), keeping the
+ * `.dark` CSS rules only as a latent secondary theme. We mirror that
+ * intent: SedniumTheme defaults to Light, but a fully working Dark
+ * ColorScheme is provided for parity / future use.
+ */
 
-private val LightColorScheme =
-  lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
+private val SedniumLightColors = lightColorScheme(
+    primary = SedniumColors.SedRed,
+    onPrimary = SedniumColors.SedYellow,
+    background = SedniumColors.SedYellow,
+    onBackground = SedniumColors.SedRed,
+    surface = SedniumColors.SedYellow,
+    onSurface = SedniumColors.SedRed,
+    surfaceVariant = SedRedAlpha.a05,
+    onSurfaceVariant = SedniumColors.SedRed,
+    outline = SedRedAlpha.a30,
+    outlineVariant = SedRedAlpha.a20,
+    error = SedniumColors.Red600,
+    onError = SedniumColors.White,
+    errorContainer = SedniumColors.Red100,
+    onErrorContainer = SedniumColors.Red800
+)
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
-  )
+private val SedniumDarkColors = darkColorScheme(
+    primary = SedniumColors.SedRed,
+    onPrimary = SedniumColors.SedYellow,
+    background = SedniumColors.DarkBackground,
+    onBackground = SedniumColors.Gray100,
+    surface = SedniumColors.DarkSurfaceAlt,
+    onSurface = SedniumColors.Gray100,
+    surfaceVariant = SedniumColors.Gray800,
+    onSurfaceVariant = SedniumColors.Gray300,
+    outline = SedniumColors.Gray700,
+    outlineVariant = SedniumColors.Gray800,
+    error = SedniumColors.Red500,
+    onError = SedniumColors.White,
+    errorContainer = SedniumColors.Red900,
+    onErrorContainer = SedniumColors.Red100
+)
+
+/** Exposes a simple boolean so deep components can branch like the TSX did with `isDark`. */
+val LocalSedniumIsDark = staticCompositionLocalOf { false }
 
 @Composable
-fun MyApplicationTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
-  // Dynamic color is available on Android 12+
-  dynamicColor: Boolean = true,
-  content: @Composable () -> Unit,
+fun SedniumTheme(
+    darkTheme: Boolean = false, // app forces light by default, matching App.tsx
+    content: @Composable () -> Unit
 ) {
-  val colorScheme =
-    when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-        val context = LocalContext.current
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-      }
+    val colors = if (darkTheme) SedniumDarkColors else SedniumLightColors
 
-      darkTheme -> DarkColorScheme
-      else -> LightColorScheme
+    androidx.compose.runtime.CompositionLocalProvider(LocalSedniumIsDark provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = SedniumTypography,
+            shapes = SedniumShapes,
+            content = content
+        )
     }
-
-  MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }
