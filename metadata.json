@@ -1,0 +1,6 @@
+{
+  "name": "Sednium LS",
+  "description": "Local AI Chat App powered by llama.cpp",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
