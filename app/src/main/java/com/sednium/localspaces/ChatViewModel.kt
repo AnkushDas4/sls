@@ -206,6 +206,60 @@ When asked to implement a feature or fix a bug:
                 var processedContent = content
                 val uriStrings = attachedUris.map { it.toString() }
 
+                if (attachedUris.isNotEmpty()) {
+                    val cr = getApplication<Application>().contentResolver
+                    val fileContents = java.lang.StringBuilder()
+                    attachedUris.forEach { uri ->
+                        try {
+                            val mimeType = cr.getType(uri)
+                            var filename = uri.path ?: "unknown"
+                            if (uri.scheme == "content") {
+                                cr.query(uri, null, null, null, null)?.use { cursor ->
+                                    if (cursor.moveToFirst()) {
+                                        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                        if (idx != -1) filename = cursor.getString(idx)
+                                    }
+                                }
+                            } else {
+                                val cut = filename.lastIndexOf('/')
+                                if (cut != -1) filename = filename.substring(cut + 1)
+                            }
+                            
+                            fileContents.append("\n\n--- BEGIN FILE: $filename ---\n")
+                            if (filename.endsWith(".zip", ignoreCase = true) || mimeType == "application/zip") {
+                                cr.openInputStream(uri)?.use { inputStream ->
+                                    java.util.zip.ZipInputStream(inputStream).use { zis ->
+                                        var entry = zis.nextEntry
+                                        while (entry != null) {
+                                            if (!entry.isDirectory && !entry.name.contains("__MACOSX") && !entry.name.endsWith(".png") && !entry.name.endsWith(".jpg") && !entry.name.endsWith(".jpeg") && !entry.name.endsWith(".mp4") && !entry.name.endsWith(".apk")) {
+                                                val entryMetadata = "\n--- ZIP ENTRY: ${entry.name} ---\n"
+                                                val bytes = zis.readBytes()
+                                                val text = String(bytes, Charsets.UTF_8)
+                                                // Verify text is somewhat readable (not binary)
+                                                if (!text.contains("\u0000")) {
+                                                    fileContents.append(entryMetadata)
+                                                    fileContents.append(text)
+                                                }
+                                            }
+                                            zis.closeEntry()
+                                            entry = zis.nextEntry
+                                        }
+                                    }
+                                }
+                            } else {
+                                cr.openInputStream(uri)?.use { inputStream ->
+                                    val text = inputStream.bufferedReader().use { it.readText() }
+                                    fileContents.append(text)
+                                }
+                            }
+                            fileContents.append("\n--- END FILE: $filename ---\n")
+                        } catch (e: Exception) {
+                            fileContents.append("\nError reading file $uri: ${e.message}\n")
+                        }
+                    }
+                    processedContent += "\n\nATTACHED FILES CONTENT:\n" + fileContents.toString()
+                }
+
                 val finalContent = processedContent
 
                 val newHistory = _chatHistory.value.toMutableList()
