@@ -128,7 +128,7 @@ fun SettingsScreen(
                         "mistralai/mixtral-8x22b-instruct-v0.1" to "Mixtral 8x22B",
                         "google/gemma-2-27b-it" to "Gemma 2 27B",
                         "microsoft/phi-3-medium-128k-instruct" to "Phi-3 Medium",
-                        "nvidia/llama-3.1-nemotron-70b-instruct" to "Nemotron 70B Agentic",
+                        "nvidia/llama-3.1-nemotron-70b-instruct" to "Nemotron 70B",
                         "deepseek-ai/deepseek-r1" to "DeepSeek R1",
                         "nvidia/nemotron-3-nano-omni-3" to "Nemotron 3 Nano Omni",
                         "nvidia/nemotron-3-ultra-550b-a55b" to "Nemotron 3 Ultra 550B",
@@ -142,7 +142,7 @@ fun SettingsScreen(
                         "anthropic/claude-3.5-sonnet" to "Claude 3.5 Sonnet",
                         "meta-llama/llama-3.3-70b-instruct" to "Llama 3.3 70B",
                         "deepseek/deepseek-chat" to "DeepSeek Chat",
-                        "anthropic/claude-3.7-sonnet" to "Claude 3.7 Sonnet (Agentic)",
+                        "anthropic/claude-3.7-sonnet" to "Claude 3.7 Sonnet",
                         "openai/gpt-4.5-preview" to "GPT-4.5 Preview",
                         "deepseek/deepseek-r1" to "DeepSeek R1"
                     )
@@ -151,7 +151,7 @@ fun SettingsScreen(
                         "llama-3.1-8b-instant" to "Llama 3.1 8B Instant",
                         "mixtral-8x7b-32768" to "Mixtral 8x7B",
                         "deepseek-r1-distill-llama-70b" to "DeepSeek R1 Distill 70B",
-                        "llama3-groq-70b-8192-tool-use-preview" to "Llama 3 Groq 70B Tool Use"
+                        "llama3-groq-70b-8192-tool-use-preview" to "Llama 3 Groq 70B"
                     )
                     com.sednium.localspaces.ProviderType.LOCAL -> listOf(
                         "llama3" to "Llama 3",
