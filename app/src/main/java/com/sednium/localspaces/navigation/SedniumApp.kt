@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxWidth
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.Attachment
 import com.sednium.localspaces.model.ChatMessage
@@ -67,10 +68,35 @@ fun SedniumApp(
     val currentChat = chats.find { it.id == currentChatId } ?: chats.firstOrNull()
     val isConfigValid = settings.model.isNotBlank()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val contentResolver = context.contentResolver
+    
+    val pickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        val newAttachments = uris.mapNotNull { uri ->
+            val typeStr = contentResolver.getType(uri) ?: "application/octet-stream"
+            val type = if (typeStr.startsWith("image/")) com.sednium.localspaces.model.AttachmentType.IMAGE else com.sednium.localspaces.model.AttachmentType.TEXT
+            var name = "attachment"
+
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst() && nameIndex != -1) {
+                    name = cursor.getString(nameIndex)
+                }
+            }
+            
+            Attachment(type = type, mimeType = typeStr, data = uri.toString(), name = name)
+        }
+        attachments = attachments + newAttachments
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = com.sednium.localspaces.ui.theme.SedniumColors.SedYellow
+            ) {
                 ChatListScreen(
                     chats = chats,
                     currentChatId = currentChatId,
@@ -103,7 +129,7 @@ fun SedniumApp(
                         attachments = emptyList()
                     }
                 },
-                onAttachClick = { /* launch system file/photo picker, append result to `attachments` */ },
+                onAttachClick = { pickerLauncher.launch("*/*") },
                 onRemoveAttachment = { idx -> attachments = attachments.toMutableList().also { it.removeAt(idx) } },
                 onTogglePresetMenu = { isPresetMenuOpen = !isPresetMenuOpen },
                 onSelectPreset = { preset ->
@@ -128,8 +154,12 @@ fun SedniumApp(
                 imageUrl = selectedImage,
                 onDismiss = { selectedImage = null }
             ) { url ->
-                // Plug in Coil here:
-                // coil.compose.AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxWidth())
+                coil.compose.AsyncImage(
+                    model = url, 
+                    contentDescription = null, 
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
             }
         }
     }
@@ -138,7 +168,8 @@ fun SedniumApp(
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         ModalBottomSheet(
             onDismissRequest = { isSettingsOpen = false },
-            sheetState = sheetState
+            sheetState = sheetState,
+            containerColor = com.sednium.localspaces.ui.theme.SedniumColors.SedYellow
         ) {
             SettingsScreen(
                 settings = settings,

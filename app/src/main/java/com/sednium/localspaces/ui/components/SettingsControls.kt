@@ -103,17 +103,24 @@ fun SettingsTextField(
     onValueChange: (String) -> Unit,
     placeholder: String = "",
     isSecret: Boolean = false,
-    singleLine: Boolean = true
+    singleLine: Boolean = true,
+    readOnly: Boolean = false,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = SedRedAlpha.a70, fontWeight = FontWeight.Bold)
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        if (label.isNotEmpty()) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = SedRedAlpha.a70, fontWeight = FontWeight.Bold)
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = singleLine,
+            readOnly = readOnly,
             placeholder = { Text(placeholder, color = SedRedAlpha.a40) },
             visualTransformation = if (isSecret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             shape = RoundedCornerShape(SedniumRadii.sm),
+            trailingIcon = trailingIcon,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = SedniumColors.SedYellow,
                 unfocusedContainerColor = SedniumColors.SedYellow,

@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
+import androidx.compose.foundation.layout.statusBarsPadding
+
 /**
  * Direct port of the <div className="flex-none h-14 ..."> header in App.tsx.
  * Background: bg-sedYellow/90 + backdrop-blur-sm -> emulated with a flat
@@ -39,8 +41,9 @@ fun SedniumTopBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp) // h-14
             .background(SedniumColors.SedYellow.copy(alpha = 0.92f))
+            .statusBarsPadding()
+            .height(56.dp) // h-14
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

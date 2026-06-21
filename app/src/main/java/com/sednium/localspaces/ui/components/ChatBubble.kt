@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -183,15 +184,17 @@ fun ChatBubble(
 @Composable
 private fun AttachmentPreview(att: Attachment, isDark: Boolean, onImageClick: (String) -> Unit) {
     if (att.type == AttachmentType.IMAGE) {
-        Box(
+        val uri = if (att.data.startsWith("content://") || att.data.startsWith("http")) att.data else "data:${att.mimeType};base64,${att.data}"
+        coil.compose.AsyncImage(
+            model = uri,
+            contentDescription = att.name,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             modifier = Modifier
                 .size(140.dp)
                 .clip(RoundedCornerShape(SedniumRadii.sm))
                 .border(1.dp, if (isDark) SedniumColors.Gray800 else SedniumColors.Gray200, RoundedCornerShape(SedniumRadii.sm))
-        ) {
-            // AsyncImage / Coil painter goes here, decoding att.data (base64) + att.mimeType.
-            // Tapping calls onImageClick(dataUri) to open the full-screen ImageViewerOverlay.
-        }
+                .clickable { onImageClick(uri) }
+        )
     } else {
         Row(
             verticalAlignment = Alignment.CenterVertically,

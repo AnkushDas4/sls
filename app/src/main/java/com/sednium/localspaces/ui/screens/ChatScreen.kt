@@ -38,6 +38,9 @@ import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 import com.sednium.localspaces.ui.theme.SedniumRadii
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
+
 /**
  * PAGE 1 / 4 — Chat Screen.
  * Direct port of App.tsx's top-level layout: header, scrollable message
@@ -83,6 +86,8 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(SedniumColors.SedYellow.copy(alpha = 0.92f))
+                    .navigationBarsPadding()
+                    .imePadding()
                     .padding(12.dp)
             ) {
                 MessageComposer(

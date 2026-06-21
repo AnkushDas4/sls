@@ -37,6 +37,8 @@ import com.sednium.localspaces.ui.components.ChatListRow
 import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
+import androidx.compose.foundation.layout.systemBarsPadding
+
 /**
  * PAGE 2 / 4 — Chat List Screen.
  * Slides in from the left (mirrors ChatListDrawer.tsx, which used
@@ -62,7 +64,7 @@ fun ChatListScreen(
         chats.sortedWith(compareByDescending<ChatSession> { it.isPinned }.thenByDescending { it.updatedAt })
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(SedniumColors.SedYellow)) {
+    Column(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         // --- Header ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

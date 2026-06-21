@@ -19,12 +19,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.ChatMode
 import com.sednium.localspaces.model.ModelProvider
+import com.sednium.localspaces.model.SavedModelPreset
 import com.sednium.localspaces.model.PROVIDER_CONFIG
 import com.sednium.localspaces.ui.components.ProviderChip
 import com.sednium.localspaces.ui.components.SettingsSectionLabel
@@ -34,6 +37,9 @@ import com.sednium.localspaces.ui.components.SettingsTextField
 import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+
 /**
  * PAGE 3 / 4 — Settings Screen.
  * Faithful, scoped port of SettingsDrawer.tsx's 874 lines: provider
@@ -42,7 +48,7 @@ import com.sednium.localspaces.ui.theme.SedniumColors
  * to match the original's "slide-up from the bottom" presentation
  * (`animate-slide-up`, see SedniumMotion.slideUpSpec()).
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
@@ -52,7 +58,8 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SedniumColors.SedYellow)
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
@@ -82,12 +89,49 @@ fun SettingsScreen(
                 )
             }
         }
-        SettingsTextField(
-            label = "Model",
-            value = settings.model,
-            onValueChange = { onUpdateSettings(settings.copy(model = it)) },
-            placeholder = "e.g. gemini-1.5-pro"
-        )
+        
+        var expandedModelDropdown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        val modelsForProvider = PROVIDER_CONFIG[settings.provider]?.popularModels ?: emptyList()
+
+        if (modelsForProvider.isEmpty()) {
+            SettingsTextField(
+                label = "Model",
+                value = settings.model,
+                onValueChange = { onUpdateSettings(settings.copy(model = it)) },
+                placeholder = "e.g. gemini-1.5-pro"
+            )
+        } else {
+            androidx.compose.material3.ExposedDropdownMenuBox(
+                expanded = expandedModelDropdown,
+                onExpandedChange = { expandedModelDropdown = it }
+            ) {
+                SettingsTextField(
+                    label = "Model",
+                    value = settings.model,
+                    onValueChange = { onUpdateSettings(settings.copy(model = it)) },
+                    placeholder = "Select or type a model",
+                    modifier = Modifier.menuAnchor(),
+                    trailingIcon = {
+                        androidx.compose.material3.ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModelDropdown)
+                    }
+                )
+                ExposedDropdownMenu(
+                    expanded = expandedModelDropdown,
+                    onDismissRequest = { expandedModelDropdown = false },
+                    modifier = Modifier.background(SedniumColors.SedYellow)
+                ) {
+                    modelsForProvider.forEach { modelName ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(modelName, color = SedniumColors.SedRed) },
+                            onClick = {
+                                onUpdateSettings(settings.copy(model = modelName))
+                                expandedModelDropdown = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
 
         HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
 
@@ -174,6 +218,19 @@ fun SettingsScreen(
             placeholder = "sk-…",
             isSecret = true
         )
+        val apiLink = PROVIDER_CONFIG[settings.provider]?.apiLink
+        if (!apiLink.isNullOrBlank()) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            androidx.compose.material3.TextButton(
+                onClick = { 
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(apiLink))
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Text("Get API Key", color = SedniumColors.SedRed, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            }
+        }
         if (settings.provider == ModelProvider.LOCAL || settings.provider == ModelProvider.CUSTOM) {
             SettingsTextField(
                 label = "Base URL",
@@ -181,6 +238,32 @@ fun SettingsScreen(
                 onValueChange = { onUpdateSettings(settings.copy(localBaseUrl = it)) },
                 placeholder = "http://localhost:11434/v1"
             )
+        }
+        
+        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+
+        androidx.compose.material3.Button(
+            onClick = {
+                val newPreset = SavedModelPreset(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = "${settings.provider.name} - ${settings.model}",
+                    provider = settings.provider,
+                    model = settings.model,
+                    chatMode = settings.chatMode,
+                    systemInstruction = settings.systemInstruction
+                )
+                onUpdateSettings(settings.copy(
+                    savedPresets = settings.savedPresets + newPreset,
+                    activePresetId = newPreset.id
+                ))
+            },
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = SedRedAlpha.a10,
+                contentColor = SedniumColors.SedRed
+            ),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+        ) {
+            Text("Save as Preset", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         }
     }
 }
