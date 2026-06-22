@@ -18,8 +18,8 @@ import androidx.compose.ui.graphics.Color
 object SedniumColors {
 
     // ---- Brand tokens (identical in both themes) ----
-    val SedYellow = Color(0xFFFDFBF7)   // primary light background / "paper"
-    val SedRed    = Color(0xFFEC5E27)   // primary accent / ink / CTA
+    val Milk = Color(0xFFFDFBF7)   // primary light background / "paper"
+    val Orange    = Color(0xFFEC5E27)   // primary accent / ink / CTA
 
     // ---- Theme-aware surfaces ----
     val DarkBackground   = Color(0xFF121212)  // .dark body background-color
@@ -60,19 +60,19 @@ object SedniumColors {
  * `border-sedRed/30`) ported as a simple alpha helper so call-sites read
  * the same way the original class names did.
  *
- * Usage: SedniumColors.SedRed.alpha(0.10f)   // == bg-sedRed/10
+ * Usage: SedniumColors.Orange.alpha(0.10f)   // == bg-sedRed/10
  */
 fun Color.alpha(a: Float): Color = this.copy(alpha = a)
 
 /** Common opacity steps the original CSS used repeatedly, pre-baked. */
-object SedRedAlpha {
-    val a05 = SedniumColors.SedRed.alpha(0.05f)
-    val a10 = SedniumColors.SedRed.alpha(0.10f)
-    val a20 = SedniumColors.SedRed.alpha(0.20f)
-    val a30 = SedniumColors.SedRed.alpha(0.30f)
-    val a40 = SedniumColors.SedRed.alpha(0.40f)
-    val a50 = SedniumColors.SedRed.alpha(0.50f)
-    val a60 = SedniumColors.SedRed.alpha(0.60f)
-    val a70 = SedniumColors.SedRed.alpha(0.70f)
-    val a90 = SedniumColors.SedRed.alpha(0.90f)
+object OrangeAlpha {
+    val a05 = SedniumColors.Orange.alpha(0.05f)
+    val a10 = SedniumColors.Orange.alpha(0.10f)
+    val a20 = SedniumColors.Orange.alpha(0.20f)
+    val a30 = SedniumColors.Orange.alpha(0.30f)
+    val a40 = SedniumColors.Orange.alpha(0.40f)
+    val a50 = SedniumColors.Orange.alpha(0.50f)
+    val a60 = SedniumColors.Orange.alpha(0.60f)
+    val a70 = SedniumColors.Orange.alpha(0.70f)
+    val a90 = SedniumColors.Orange.alpha(0.90f)
 }

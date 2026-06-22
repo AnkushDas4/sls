@@ -1,245 +1,503 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.sednium.localspaces.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.sednium.localspaces.mcp.McpServerManager
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.ChatMode
-import com.sednium.localspaces.model.MCPConfig
 import com.sednium.localspaces.model.ModelProvider
+import com.sednium.localspaces.model.SavedModelPreset
 import com.sednium.localspaces.model.PROVIDER_CONFIG
-import com.sednium.localspaces.ui.components.AddMcpServerDialog
-import com.sednium.localspaces.ui.components.McpServerRow
-import com.sednium.localspaces.ui.components.ProviderChip
+import com.sednium.localspaces.navigation.LocalServerStatus
 import com.sednium.localspaces.ui.components.SettingsSectionLabel
 import com.sednium.localspaces.ui.components.SettingsSliderRow
 import com.sednium.localspaces.ui.components.SettingsSwitchRow
 import com.sednium.localspaces.ui.components.SettingsTextField
-import com.sednium.localspaces.ui.theme.SedRedAlpha
+import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
-/**
- * PAGE 3 / 4 — Settings Screen.
- * Faithful, scoped port of SettingsDrawer.tsx's 874 lines: provider
- * picker, chat-mode picker, generation sliders, history toggle, and a
- * per-provider API key field. Host inside a Material3 ModalBottomSheet
- * to match the original's "slide-up from the bottom" presentation
- * (`animate-slide-up`, see SedniumMotion.slideUpSpec()).
- */
+enum class SettingsTab {
+    API_MODELS, FEATURES_GENERAL
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
+    localServerStatus: LocalServerStatus = LocalServerStatus.UNKNOWN,
     onUpdateSettings: (AppSettings) -> Unit,
-    onClose: () -> Unit,
-    mcpServerManager: McpServerManager
+    onClose: () -> Unit
 ) {
+    var currentTab by remember { mutableStateOf(SettingsTab.API_MODELS) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(SedniumColors.SedYellow)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .navigationBarsPadding()
+            .imePadding()
     ) {
-        // --- Header ---
+        // --- Header Tabs ---
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Icons.Filled.Tune, contentDescription = null, tint = SedniumColors.SedRed)
-                Text("Settings", style = MaterialTheme.typography.titleLarge, color = SedniumColors.SedRed)
+            Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceEvenly) {
+                SettingsTabButton(
+                    title = "API & MODELS",
+                    isSelected = currentTab == SettingsTab.API_MODELS,
+                    modifier = Modifier.weight(1f),
+                    onClick = { currentTab = SettingsTab.API_MODELS }
+                )
+                SettingsTabButton(
+                    title = "FEATURES & GENERAL",
+                    isSelected = currentTab == SettingsTab.FEATURES_GENERAL,
+                    modifier = Modifier.weight(1f),
+                    onClick = { currentTab = SettingsTab.FEATURES_GENERAL }
+                )
             }
             IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = SedniumColors.SedRed)
+                Icon(Icons.Filled.Close, contentDescription = "Close", tint = SedniumColors.Orange)
             }
         }
+        
+        HorizontalDivider(color = OrangeAlpha.a20, thickness = 1.dp)
 
-        // --- Provider & Model ---
-        SettingsSectionLabel("Provider & Model")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // --- Content ---
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .animateContentSize()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            if (currentTab == SettingsTab.API_MODELS) {
+                ApiModelsContent(settings, localServerStatus, onUpdateSettings)
+            } else {
+                FeaturesGeneralContent(settings, onUpdateSettings)
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsTabButton(title: String, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(
+        modifier = modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) SedniumColors.Orange else OrangeAlpha.a40,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .height(2.dp)
+                    .fillMaxWidth(if (title.length > 5) 0.8f else 1f)
+                    .background(SedniumColors.Orange)
+            )
+        } else {
+            Spacer(modifier = Modifier.height(2.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ApiModelsContent(
+    settings: AppSettings,
+    localServerStatus: LocalServerStatus,
+    onUpdateSettings: (AppSettings) -> Unit
+) {
+    // Provider Dropdown
+    SettingsSectionLabel("CHOOSE PROVIDER")
+    var expandedProviderDropdown by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expandedProviderDropdown,
+        onExpandedChange = { expandedProviderDropdown = it }
+    ) {
+        SettingsTextField(
+            label = "",
+            value = PROVIDER_CONFIG[settings.provider]?.displayName ?: settings.provider.name,
+            onValueChange = {},
+            readOnly = true,
+            modifier = Modifier.menuAnchor(),
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProviderDropdown) }
+        )
+        ExposedDropdownMenu(
+            expanded = expandedProviderDropdown,
+            onDismissRequest = { expandedProviderDropdown = false },
+            modifier = Modifier.background(SedniumColors.Milk)
+        ) {
             ModelProvider.entries.forEach { provider ->
-                ProviderChip(
-                    label = PROVIDER_CONFIG[provider]?.displayName ?: provider.name,
-                    selected = settings.provider == provider,
-                    onClick = { onUpdateSettings(settings.copy(provider = provider)) }
+                DropdownMenuItem(
+                    text = { Text(PROVIDER_CONFIG[provider]?.displayName ?: provider.name, color = SedniumColors.Orange) },
+                    onClick = {
+                        val popularModels = PROVIDER_CONFIG[provider]?.popularModels
+                        val defaultModel = popularModels?.firstOrNull()?.id ?: ""
+                        onUpdateSettings(settings.copy(provider = provider, model = defaultModel))
+                        expandedProviderDropdown = false
+                    }
                 )
             }
         }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // API Key Field
+    val providerName = PROVIDER_CONFIG[settings.provider]?.displayName ?: ""
+    SettingsSectionLabel("${providerName.uppercase()} API KEY")
+    SettingsTextField(
+        label = "",
+        value = apiKeyFor(settings),
+        onValueChange = { onUpdateSettings(updateApiKeyFor(settings, it)) },
+        placeholder = "sk-…",
+        isSecret = true,
+        trailingIcon = {
+            Row(modifier = Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "EDIT",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SedniumColors.Orange,
+                    modifier = Modifier.clickable { /* Handle edit */ }.padding(4.dp)
+                )
+                Text(
+                    text = "CLEAR",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = SedniumColors.Orange,
+                    modifier = Modifier.clickable { onUpdateSettings(updateApiKeyFor(settings, "")) }.padding(4.dp)
+                )
+            }
+        }
+    )
+    val apiLink = PROVIDER_CONFIG[settings.provider]?.apiLink
+    if (!apiLink.isNullOrBlank()) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        TextButton(
+            onClick = {
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(apiLink))
+                context.startActivity(intent)
+            }
+        ) {
+            Text("Get API Key", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange, fontWeight = FontWeight.Bold)
+        }
+    }
+
+    if (settings.provider == ModelProvider.LOCAL || settings.provider == ModelProvider.CUSTOM) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsSectionLabel("Base URL")
+            if (settings.provider == ModelProvider.LOCAL && localServerStatus != LocalServerStatus.UNKNOWN) {
+                Spacer(modifier = Modifier.width(8.dp))
+                val statusColor = when (localServerStatus) {
+                    LocalServerStatus.IDLE -> Color(0xFF4CAF50)
+                    LocalServerStatus.PROCESSING -> Color(0xFFFFC107)
+                    LocalServerStatus.OFFLINE -> Color(0xFFF44336)
+                    else -> Color.Transparent
+                }
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(statusColor))
+            }
+        }
         SettingsTextField(
-            label = "Model",
+            label = "",
+            value = settings.localBaseUrl,
+            onValueChange = { onUpdateSettings(settings.copy(localBaseUrl = it)) },
+            placeholder = "http://localhost:11434/v1"
+        )
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Model Dropdown
+    SettingsSectionLabel("Select Model")
+    var expandedModelDropdown by remember { mutableStateOf(false) }
+    val modelsForProvider = PROVIDER_CONFIG[settings.provider]?.popularModels ?: emptyList()
+
+    if (modelsForProvider.isEmpty()) {
+        SettingsTextField(
+            label = "",
             value = settings.model,
             onValueChange = { onUpdateSettings(settings.copy(model = it)) },
             placeholder = "e.g. gemini-1.5-pro"
         )
-
-        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
-
-        // --- Chat Mode ---
-        SettingsSectionLabel("Chat Mode")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChatMode.entries.forEach { mode ->
-                ProviderChip(
-                    label = mode.name,
-                    selected = settings.chatMode == mode,
-                    onClick = { onUpdateSettings(settings.copy(chatMode = mode)) }
-                )
-            }
-        }
-
-        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
-
-        // --- Behavior ---
-        SettingsSectionLabel("Behavior")
-        SettingsSwitchRow(
-            label = "Enable Tools",
-            description = "Allow function/tool calling when supported",
-            checked = settings.enableTools,
-            onCheckedChange = { onUpdateSettings(settings.copy(enableTools = it)) }
-        )
-        SettingsTextField(
-            label = "System Instruction",
-            value = settings.systemInstruction,
-            onValueChange = { onUpdateSettings(settings.copy(systemInstruction = it)) },
-            placeholder = "Optional system prompt override",
-            singleLine = false
-        )
-
-        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
-
-        // --- Generation parameters ---
-        SettingsSectionLabel("Generation")
-        SettingsSliderRow(
-            label = "Temperature",
-            value = settings.temperature,
-            onValueChange = { onUpdateSettings(settings.copy(temperature = it)) },
-            valueRange = 0f..2f
-        )
-        SettingsSliderRow(
-            label = "Top P",
-            value = settings.topP,
-            onValueChange = { onUpdateSettings(settings.copy(topP = it)) },
-            valueRange = 0f..1f
-        )
-        SettingsSliderRow(
-            label = "Top K",
-            value = settings.topK.toFloat(),
-            onValueChange = { onUpdateSettings(settings.copy(topK = it.toInt())) },
-            valueRange = 1f..100f,
-            displayFormat = { it.toInt().toString() }
-        )
-        SettingsSliderRow(
-            label = "Max Tokens",
-            value = settings.maxTokens.toFloat(),
-            onValueChange = { onUpdateSettings(settings.copy(maxTokens = it.toInt())) },
-            valueRange = 256f..32000f,
-            displayFormat = { it.toInt().toString() }
-        )
-
-        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
-
-        // --- MCP Servers (real connections, not just stored strings) ---
-        var isAddMcpDialogOpen by remember { mutableStateOf(false) }
-        val mcpStatuses by mcpServerManager.statuses.collectAsState()
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SettingsSectionLabel("MCP Servers")
-            TextButton(onClick = { isAddMcpDialogOpen = true }) {
-                Icon(Icons.Filled.Add, contentDescription = null, tint = SedniumColors.SedRed)
-                Text(" Add", color = SedniumColors.SedRed, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-            }
-        }
-
-        if (mcpStatuses.isEmpty()) {
-            Text(
-                "No MCP servers connected. Tools they expose become real, callable functions for the model — not just a name dropped into the prompt.",
-                style = MaterialTheme.typography.labelSmall,
-                color = SedRedAlpha.a60
+    } else {
+        ExposedDropdownMenuBox(
+            expanded = expandedModelDropdown,
+            onExpandedChange = { expandedModelDropdown = it }
+        ) {
+            val displayValue = modelsForProvider.find { it.id == settings.model }?.label ?: settings.model
+            SettingsTextField(
+                label = "",
+                value = displayValue,
+                onValueChange = {},
+                placeholder = "Select or type a model",
+                readOnly = true,
+                modifier = Modifier.menuAnchor(),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModelDropdown) }
             )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                mcpStatuses.values.forEach { info ->
-                    McpServerRow(
-                        info = info,
-                        onRetry = { mcpServerManager.connect(info.config) },
-                        onDelete = {
-                            mcpServerManager.disconnect(info.config.id)
-                            onUpdateSettings(settings.copy(mcpServers = settings.mcpServers.filterNot { it.id == info.config.id }))
+            ExposedDropdownMenu(
+                expanded = expandedModelDropdown,
+                onDismissRequest = { expandedModelDropdown = false },
+                modifier = Modifier.background(SedniumColors.Milk)
+            ) {
+                modelsForProvider.forEach { modelOption ->
+                    DropdownMenuItem(
+                        text = { Text(modelOption.label, color = SedniumColors.Orange) },
+                        leadingIcon = {
+                            val iconVector = when(modelOption.icon) {
+                                com.sednium.localspaces.model.ModelIconType.TEXT -> androidx.compose.material.icons.Icons.Default.Notes
+                                com.sednium.localspaces.model.ModelIconType.CODE -> androidx.compose.material.icons.Icons.Default.Code
+                                com.sednium.localspaces.model.ModelIconType.AGENT -> androidx.compose.material.icons.Icons.Default.Psychology
+                                com.sednium.localspaces.model.ModelIconType.IMAGE -> androidx.compose.material.icons.Icons.Default.Image
+                                com.sednium.localspaces.model.ModelIconType.VIDEO -> androidx.compose.material.icons.Icons.Default.PlayArrow
+                                com.sednium.localspaces.model.ModelIconType.AUTO -> androidx.compose.material.icons.Icons.Default.Refresh
+                                com.sednium.localspaces.model.ModelIconType.LIGHTNING -> androidx.compose.material.icons.Icons.Default.FlashOn
+                            }
+                            androidx.compose.material3.Icon(
+                                imageVector = iconVector,
+                                contentDescription = null,
+                                tint = SedniumColors.Orange
+                            )
+                        },
+                        onClick = {
+                            onUpdateSettings(settings.copy(model = modelOption.id))
+                            expandedModelDropdown = false
                         }
                     )
                 }
             }
         }
+    }
 
-        if (isAddMcpDialogOpen) {
-            AddMcpServerDialog(
-                onDismiss = { isAddMcpDialogOpen = false },
-                onAdd = { name, url, token ->
-                    val newConfig = MCPConfig(id = System.currentTimeMillis().toString(), name = name, url = url, authToken = token)
-                    onUpdateSettings(settings.copy(mcpServers = settings.mcpServers + newConfig))
-                    mcpServerManager.connect(newConfig)
-                    isAddMcpDialogOpen = false
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // System Prompts
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("SYSTEM PROMPTS", style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a70, fontWeight = FontWeight.Bold)
+            Icon(Icons.Filled.Description, contentDescription = null, tint = OrangeAlpha.a70, modifier = Modifier.size(16.dp))
+        }
+        Box(
+            modifier = Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .background(Color.Transparent)
+                .border(1.dp, SedniumColors.Orange, androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                .clickable {
+                     val newMode = when(settings.chatMode) {
+                        ChatMode.QUICK -> ChatMode.THINKING
+                        ChatMode.THINKING -> ChatMode.CODING
+                        ChatMode.CODING -> ChatMode.QUICK
+                    }
+                    onUpdateSettings(settings.copy(chatMode = newMode))
                 }
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text("${settings.chatMode.name} MODE", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange, fontWeight = FontWeight.Bold)
+        }
+    }
+    
+    SettingsTextField(
+        label = "",
+        value = settings.systemInstruction,
+        onValueChange = { onUpdateSettings(settings.copy(systemInstruction = it)) },
+        placeholder = "You are an elite, world-class software architect...",
+        singleLine = false,
+        modifier = Modifier.height(200.dp)
+    )
+}
+
+@Composable
+fun FeaturesGeneralContent(
+    settings: AppSettings,
+    onUpdateSettings: (AppSettings) -> Unit
+) {
+    SettingsSectionLabel("BEHAVIOR MODE")
+    Text(
+        text = settings.chatMode.name.lowercase(),
+        style = MaterialTheme.typography.bodySmall,
+        color = OrangeAlpha.a70,
+        modifier = Modifier.padding(bottom = 4.dp)
+    )
+    val sliderPosition = when(settings.chatMode) {
+        ChatMode.QUICK -> 0f
+        ChatMode.THINKING -> 1f
+        ChatMode.CODING -> 2f
+    }
+    Slider(
+        value = sliderPosition,
+        onValueChange = { value ->
+            val newMode = when {
+                value < 0.5f -> ChatMode.QUICK
+                value < 1.5f -> ChatMode.THINKING
+                else -> ChatMode.CODING
+            }
+            onUpdateSettings(settings.copy(chatMode = newMode))
+        },
+        valueRange = 0f..2f,
+        steps = 1,
+        colors = SliderDefaults.colors(
+            thumbColor = SedniumColors.Orange,
+            activeTrackColor = OrangeAlpha.a40,
+            inactiveTrackColor = OrangeAlpha.a20
+        )
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text("QUICK", style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a70)
+        Text("THINKING", style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a70)
+        Text("CODING", style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a70)
+    }
+    
+    HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+
+    SettingsSectionLabel("GENERATION PARAMETERS")
+    SettingsSliderRow(
+        label = "Temperature",
+        value = settings.temperature,
+        onValueChange = { onUpdateSettings(settings.copy(temperature = it)) },
+        valueRange = 0f..2f
+    )
+    SettingsSliderRow(
+        label = "Top P",
+        value = settings.topP,
+        onValueChange = { onUpdateSettings(settings.copy(topP = it)) },
+        valueRange = 0f..1f
+    )
+    SettingsSliderRow(
+        label = "Max Tokens (Output)",
+        value = settings.maxTokens.toFloat(),
+        onValueChange = { onUpdateSettings(settings.copy(maxTokens = it.toInt())) },
+        valueRange = 256f..32000f,
+        displayFormat = { it.toInt().toString() }
+    )
+
+    HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+
+    // Tool Calling
+    SettingsSwitchRow(
+        label = "TOOL CALLING CAPABILITIES",
+        description = "Enables AI to make zips, read workflows, use MCPs. Turning off saves API cost.",
+        checked = settings.enableTools,
+        onCheckedChange = { onUpdateSettings(settings.copy(enableTools = it)) }
+    )
+    
+    HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+    
+    // History
+    SettingsSwitchRow(
+        label = "SAVE CHAT HISTORY",
+        description = "Persist chats to local storage",
+        checked = settings.enableHistory,
+        onCheckedChange = { onUpdateSettings(settings.copy(enableHistory = it)) }
+    )
+
+    HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+
+    // Presets
+    SettingsSectionLabel("SAVED MODEL CONFIGURATIONS")
+    Text("Save your current Provider, Model, Mode, and Prompts as a preset to quickly switch in the main chat.", style = MaterialTheme.typography.bodySmall, color = OrangeAlpha.a70)
+    
+    Spacer(modifier = Modifier.height(12.dp))
+    
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(modifier = Modifier.weight(1f)) {
+            SettingsTextField(
+                label = "",
+                value = "",
+                onValueChange = { },
+                placeholder = "e.g. Code Llama Fast"
             )
         }
-
-        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
-
-        // --- History ---
-        SettingsSectionLabel("History")
-        SettingsSwitchRow(
-            label = "Save Chat History",
-            description = "Persist chats to local storage",
-            checked = settings.enableHistory,
-            onCheckedChange = { onUpdateSettings(settings.copy(enableHistory = it)) }
-        )
-
-        HorizontalDivider(color = SedRedAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
-
-        // --- API Key (only the active provider's key is shown, matching the TSX's conditional render) ---
-        SettingsSectionLabel("${PROVIDER_CONFIG[settings.provider]?.displayName ?: ""} API Key")
-        SettingsTextField(
-            label = "API Key",
-            value = apiKeyFor(settings),
-            onValueChange = { onUpdateSettings(updateApiKeyFor(settings, it)) },
-            placeholder = "sk-…",
-            isSecret = true
-        )
-        if (settings.provider == ModelProvider.LOCAL || settings.provider == ModelProvider.CUSTOM) {
-            SettingsTextField(
-                label = "Base URL",
-                value = settings.localBaseUrl,
-                onValueChange = { onUpdateSettings(settings.copy(localBaseUrl = it)) },
-                placeholder = "http://localhost:11434/v1"
+        Button(
+            onClick = {
+                val newPreset = SavedModelPreset(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = "${settings.provider.name} - ${settings.model}",
+                    provider = settings.provider,
+                    model = settings.model,
+                    chatMode = settings.chatMode,
+                    systemInstruction = settings.systemInstruction
+                )
+                onUpdateSettings(settings.copy(
+                    savedPresets = settings.savedPresets + newPreset,
+                    activePresetId = newPreset.id
+                ))
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = SedniumColors.Orange,
+                contentColor = SedniumColors.Milk
             )
+        ) {
+            Text("SAVE", fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -267,3 +525,4 @@ private fun updateApiKeyFor(s: AppSettings, value: String): AppSettings = when (
     ModelProvider.CUSTOM -> s.copy(customApiKey = value)
     else -> s
 }
+

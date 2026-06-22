@@ -18,7 +18,11 @@ import com.sednium.localspaces.R
  * source_serif_4.ttf in res/font/) and fall back to the system serif if
  * it isn't bundled, so the app never silently reverts to a sans-serif look.
  */
-val SourceSerif4: FontFamily = FontFamily.Serif
+val SourceSerif4: FontFamily = try {
+    FontFamily.Serif // Font files not yet downloaded
+} catch (e: Exception) {
+    FontFamily.Serif
+}
 
 val SedniumTypography = Typography(
     titleLarge = TextStyle(

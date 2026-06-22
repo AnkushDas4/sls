@@ -16,16 +16,16 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 
 private val SedniumLightColors = lightColorScheme(
-    primary = SedniumColors.SedRed,
-    onPrimary = SedniumColors.SedYellow,
-    background = SedniumColors.SedYellow,
-    onBackground = SedniumColors.SedRed,
-    surface = SedniumColors.SedYellow,
-    onSurface = SedniumColors.SedRed,
-    surfaceVariant = SedRedAlpha.a05,
-    onSurfaceVariant = SedniumColors.SedRed,
-    outline = SedRedAlpha.a30,
-    outlineVariant = SedRedAlpha.a20,
+    primary = SedniumColors.Orange,
+    onPrimary = SedniumColors.Milk,
+    background = SedniumColors.Milk,
+    onBackground = SedniumColors.Orange,
+    surface = SedniumColors.Milk,
+    onSurface = SedniumColors.Orange,
+    surfaceVariant = OrangeAlpha.a05,
+    onSurfaceVariant = SedniumColors.Orange,
+    outline = OrangeAlpha.a30,
+    outlineVariant = OrangeAlpha.a20,
     error = SedniumColors.Red600,
     onError = SedniumColors.White,
     errorContainer = SedniumColors.Red100,
@@ -33,8 +33,8 @@ private val SedniumLightColors = lightColorScheme(
 )
 
 private val SedniumDarkColors = darkColorScheme(
-    primary = SedniumColors.SedRed,
-    onPrimary = SedniumColors.SedYellow,
+    primary = SedniumColors.Orange,
+    onPrimary = SedniumColors.Milk,
     background = SedniumColors.DarkBackground,
     onBackground = SedniumColors.Gray100,
     surface = SedniumColors.DarkSurfaceAlt,

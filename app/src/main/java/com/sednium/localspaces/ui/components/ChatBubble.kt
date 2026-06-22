@@ -1,4 +1,3 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.sednium.localspaces.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -31,15 +30,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
 import com.sednium.localspaces.model.Attachment
 import com.sednium.localspaces.model.AttachmentType
 import com.sednium.localspaces.model.ChatMessage
 import com.sednium.localspaces.model.Role
-import com.sednium.localspaces.markdown.MarkdownView
-import com.sednium.localspaces.ui.theme.SedRedAlpha
+import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 import com.sednium.localspaces.ui.theme.SedniumRadii
 import com.sednium.localspaces.ui.theme.ThinkingDots
@@ -49,6 +54,7 @@ import com.sednium.localspaces.ui.theme.ThinkingDots
  * messages: left-aligned with a sedRed/sedYellow bot avatar.
  * User messages: right-aligned pill, sedRed/5 fill + sedRed/30 border.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ChatBubble(
     msg: ChatMessage,
@@ -58,7 +64,11 @@ fun ChatBubble(
     onImageClick: (String) -> Unit
 ) {
     val isModel = msg.role == Role.MODEL
-    var thoughtExpanded by remember { mutableStateOf(false) }
+    var userThoughtExpanded by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(msg.isThinking) {
+        if (!msg.isThinking) userThoughtExpanded = false
+    }
+    val thoughtExpanded = userThoughtExpanded ?: msg.isThinking
 
     Row(
         modifier = Modifier
@@ -75,10 +85,10 @@ fun ChatBubble(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(SedniumRadii.lg))
-                        .background(SedniumColors.SedRed),
+                        .background(SedniumColors.Orange),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.SmartToy, contentDescription = null, tint = SedniumColors.SedYellow, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.SmartToy, contentDescription = null, tint = SedniumColors.Milk, modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -86,8 +96,8 @@ fun ChatBubble(
                 modifier = if (!isModel) {
                     Modifier
                         .clip(RoundedCornerShape(SedniumRadii.pill))
-                        .background(SedRedAlpha.a05)
-                        .border(1.dp, SedRedAlpha.a30, RoundedCornerShape(SedniumRadii.pill))
+                        .background(OrangeAlpha.a05)
+                        .border(1.dp, OrangeAlpha.a30, RoundedCornerShape(SedniumRadii.pill))
                         .padding(horizontal = 20.dp, vertical = 10.dp)
                 } else {
                     Modifier.padding(vertical = 2.dp)
@@ -114,17 +124,44 @@ fun ChatBubble(
                             }
                         }
                     }
+
+                    // --- Citations Carousel (Research) ---
+                    if (msg.citations.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .horizontalScroll(rememberScrollState())
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            msg.citations.forEach { cit ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (isDark) SedniumColors.DarkSurfaceAlt else SedniumColors.Gray100)
+                                        .border(1.dp, if (isDark) SedniumColors.Gray700 else SedniumColors.Gray200, RoundedCornerShape(16.dp))
+                                        .clickable { /* open cit.url */ }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("[${cit.id}]", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(cit.domain, style = MaterialTheme.typography.labelSmall, color = if (isDark) SedniumColors.Gray300 else SedniumColors.Gray700)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // --- Thought / reasoning trace (collapsible <details>) ---
                 if (msg.thought != null) {
-                    val showThinking = isGenerating && msg.content.isBlank()
+                    val showThinking = msg.isThinking
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .padding(top = 8.dp)
                             .clip(RoundedCornerShape(SedniumRadii.sm))
+                            .clickable { userThoughtExpanded = !thoughtExpanded }
                             .padding(4.dp)
                     ) {
                         if (showThinking) {
@@ -148,22 +185,53 @@ fun ChatBubble(
                                 .border(0.dp, SedniumColors.Gray200) // left rule emulated via padding card
                                 .padding(start = 8.dp)
                         ) {
-                            MarkdownView(content = msg.thought, isDark = isDark)
+                            MarkdownText(content = msg.thought, isDark = isDark)
+                        }
+                    }
+                }
+
+                // --- Tool Execution / Terminal Bash ---
+                if (msg.toolCalls.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .clip(RoundedCornerShape(SedniumRadii.sm))
+                            .background(SedniumColors.Gray800) // dark themed mono
+                            .padding(12.dp)
+                    ) {
+                        msg.toolCalls.forEach { tool ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("$ ", color = SedniumColors.Green500, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                                Text(tool.command, color = SedniumColors.Gray300, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                if (tool.isExecuting) {
+                                    Text("[\\]", color = SedniumColors.Milk, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                                } else if (tool.success) {
+                                    Box(modifier = Modifier.background(SedniumColors.Green500, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                                        Text("SUCCESS", color = SedniumColors.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    Box(modifier = Modifier.background(SedniumColors.Red600, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                                        Text("FAILED", color = SedniumColors.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
                 // --- Generating placeholder when there's no content/thought yet ---
-                if (msg.content.isBlank() && msg.thought == null && isGenerating) {
+                if (msg.content.isBlank() && msg.thought == null && isGenerating && !msg.isThinking && msg.toolCalls.isEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ThinkingDots(dotColor = SedniumColors.SedRed.copy(alpha = 0.5f))
-                        Text("Generating…", style = MaterialTheme.typography.labelSmall, color = SedniumColors.SedRed.copy(alpha = 0.5f))
+                        ThinkingDots(dotColor = SedniumColors.Orange.copy(alpha = 0.5f))
+                        Text("Generating…", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange.copy(alpha = 0.5f))
                     }
                 }
 
                 // --- Main content ---
                 if (msg.content.isNotBlank()) {
-                    MarkdownView(
+                    MarkdownText(
                         content = msg.content,
                         isDark = isDark,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
@@ -184,15 +252,17 @@ fun ChatBubble(
 @Composable
 private fun AttachmentPreview(att: Attachment, isDark: Boolean, onImageClick: (String) -> Unit) {
     if (att.type == AttachmentType.IMAGE) {
-        Box(
+        val uri = if (att.data.startsWith("content://") || att.data.startsWith("http")) att.data else "data:${att.mimeType};base64,${att.data}"
+        coil.compose.AsyncImage(
+            model = uri,
+            contentDescription = att.name,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             modifier = Modifier
                 .size(140.dp)
                 .clip(RoundedCornerShape(SedniumRadii.sm))
                 .border(1.dp, if (isDark) SedniumColors.Gray800 else SedniumColors.Gray200, RoundedCornerShape(SedniumRadii.sm))
-        ) {
-            // AsyncImage / Coil painter goes here, decoding att.data (base64) + att.mimeType.
-            // Tapping calls onImageClick(dataUri) to open the full-screen ImageViewerOverlay.
-        }
+                .clickable { onImageClick(uri) }
+        )
     } else {
         Row(
             verticalAlignment = Alignment.CenterVertically,

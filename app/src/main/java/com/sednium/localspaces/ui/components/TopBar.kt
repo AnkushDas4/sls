@@ -1,18 +1,17 @@
 package com.sednium.localspaces.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,11 +19,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.sednium.localspaces.ui.theme.SedRedAlpha
+import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
+
+import androidx.compose.foundation.layout.statusBarsPadding
+
+import androidx.compose.material.icons.filled.Share
+
+import com.sednium.localspaces.navigation.LocalServerStatus
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.Color
 
 /**
  * Direct port of the <div className="flex-none h-14 ..."> header in App.tsx.
@@ -35,16 +45,22 @@ import com.sednium.localspaces.ui.theme.SedniumColors
 fun SedniumTopBar(
     title: String,
     subtitle: String,
+    localServerStatus: LocalServerStatus? = null,
     showClear: Boolean,
+    showExport: Boolean = true,
+    isFocusMode: Boolean = false,
     onMenuClick: () -> Unit,
+    onExportClick: () -> Unit = {},
     onClearClick: () -> Unit,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onFocusModeToggle: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(SedniumColors.Milk.copy(alpha = 0.92f))
+            .statusBarsPadding()
             .height(56.dp) // h-14
-            .background(SedniumColors.SedYellow.copy(alpha = 0.92f))
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -52,34 +68,63 @@ fun SedniumTopBar(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onMenuClick) {
-                Icon(Icons.Filled.Menu, contentDescription = "Chats", tint = SedniumColors.SedRed)
+            if (!isFocusMode) {
+                IconButton(onClick = onMenuClick) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Chats", tint = SedniumColors.Orange)
+                }
             }
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title.ifBlank { "Sednium AI" },
                     style = MaterialTheme.typography.titleMedium,
-                    color = SedniumColors.SedRed,
+                    color = SedniumColors.Orange,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = SedRedAlpha.a70,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OrangeAlpha.a70,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (localServerStatus != null && localServerStatus != LocalServerStatus.UNKNOWN) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        val statusColor = when (localServerStatus) {
+                            LocalServerStatus.IDLE -> Color(0xFF4CAF50)
+                            LocalServerStatus.PROCESSING -> Color(0xFFFFC107)
+                            LocalServerStatus.OFFLINE -> Color(0xFFF44336)
+                            else -> Color.Transparent
+                        }
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(statusColor)
+                        )
+                    }
+                }
             }
         }
 
-        if (showClear) {
-            IconButton(onClick = onClearClick) {
-                Icon(Icons.Filled.Delete, contentDescription = "Clear chat", tint = SedniumColors.SedRed)
+        if (showExport && !isFocusMode) {
+            IconButton(onClick = onExportClick) {
+                Icon(Icons.Filled.Share, contentDescription = "Export chat", tint = SedniumColors.Orange)
             }
         }
-        IconButton(onClick = onSettingsClick) {
-            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = SedniumColors.SedRed)
+        if (showClear && !isFocusMode) {
+            IconButton(onClick = onClearClick) {
+                Icon(Icons.Filled.Delete, contentDescription = "Clear chat", tint = SedniumColors.Orange)
+            }
+        }
+        IconButton(onClick = onFocusModeToggle) {
+            Icon(if (isFocusMode) androidx.compose.material.icons.Icons.Filled.VisibilityOff else androidx.compose.material.icons.Icons.Filled.Visibility, contentDescription = "Focus Mode", tint = SedniumColors.Orange)
+        }
+        if (!isFocusMode) {
+            IconButton(onClick = onSettingsClick) {
+                Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = SedniumColors.Orange)
+            }
         }
     }
 }

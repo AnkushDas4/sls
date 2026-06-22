@@ -31,12 +31,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sednium.localspaces.model.ChatSession
-import com.sednium.localspaces.ui.theme.SedRedAlpha
+import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 import com.sednium.localspaces.ui.theme.SedniumRadii
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+import androidx.compose.material.icons.outlined.*
 
 /** Port of one row inside ChatListDrawer.tsx — selectable, pinnable, renamable, deletable. */
 @Composable
@@ -60,10 +62,10 @@ fun ChatListRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(SedniumRadii.md))
-            .background(if (isCurrent && !isSelectionMode) SedRedAlpha.a10 else Color.Transparent)
+            .background(if (isCurrent && !isSelectionMode) OrangeAlpha.a10 else Color.Transparent)
             .border(
                 1.dp,
-                if (isCurrent && !isSelectionMode) SedRedAlpha.a20 else Color.Transparent,
+                if (isCurrent && !isSelectionMode) OrangeAlpha.a20 else Color.Transparent,
                 RoundedCornerShape(SedniumRadii.md)
             )
             .clickable(onClick = onClick)
@@ -73,36 +75,40 @@ fun ChatListRow(
             Icon(
                 if (isChecked) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
                 contentDescription = null,
-                tint = if (isChecked) SedniumColors.SedRed else SedRedAlpha.a50
+                tint = if (isChecked) SedniumColors.Orange else OrangeAlpha.a50
             )
         }
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (chat.isPinned) {
-                    Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = SedRedAlpha.a60, modifier = Modifier.padding(end = 2.dp))
+                    Icon(Icons.Filled.PushPin, contentDescription = "Pinned", tint = OrangeAlpha.a60, modifier = Modifier.padding(end = 2.dp))
                 }
                 Text(
                     chat.title.ifBlank { "New Chat" },
                     fontWeight = FontWeight.Bold,
-                    color = SedniumColors.SedRed,
+                    color = SedniumColors.Orange,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
-            Text(dateFmt, style = MaterialTheme.typography.labelSmall, color = SedRedAlpha.a50)
+            Text(dateFmt, style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a50)
         }
 
         if (!isSelectionMode) {
             IconButton(onClick = onTogglePin) {
-                Icon(Icons.Filled.PushPin, contentDescription = "Pin", tint = SedRedAlpha.a60)
+                Icon(
+                    if (chat.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, 
+                    contentDescription = if (chat.isPinned) "Unpin" else "Pin", 
+                    tint = OrangeAlpha.a60
+                )
             }
             IconButton(onClick = onRename) {
-                Icon(Icons.Filled.Edit, contentDescription = "Rename", tint = SedRedAlpha.a60)
+                Icon(Icons.Filled.Edit, contentDescription = "Rename", tint = OrangeAlpha.a60)
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = SedRedAlpha.a60)
+                Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = OrangeAlpha.a60)
             }
         }
     }

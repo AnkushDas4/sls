@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import com.sednium.localspaces.ui.theme.SedRedAlpha
+import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
 /**
@@ -38,10 +38,10 @@ fun MarkdownText(
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val textColor = if (isDark) SedniumColors.Gray200 else SedniumColors.SedRed
+    val textColor = if (isDark) SedniumColors.Gray200 else SedniumColors.Orange
     val codeBg = if (isDark) SedniumColors.Gray800 else SedniumColors.Gray100
     val codeFg = if (isDark) SedniumColors.Gray200 else SedniumColors.Gray800
-    val quoteBorder = if (isDark) SedniumColors.Gray700 else SedRedAlpha.a20
+    val quoteBorder = if (isDark) SedniumColors.Gray700 else OrangeAlpha.a20
 
     Column(modifier = modifier.fillMaxWidth()) {
         val blocks = content.split("```")
