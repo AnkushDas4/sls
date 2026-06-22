@@ -6,11 +6,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.sednium.localspaces.mcp.McpServerManager
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.ChatMessage
 import com.sednium.localspaces.model.ChatSession
@@ -46,6 +49,17 @@ class MainActivity : ComponentActivity() {
                     }
                     var currentChatId by remember { mutableStateOf(chats.first().id) }
                     var isLoading by remember { mutableStateOf(false) }
+
+                    // Own one McpServerManager for the whole app lifetime; reconnect every
+                    // server the user had configured as soon as settings are loaded, and
+                    // tear every connection down cleanly when the screen leaves composition.
+                    val mcpServerManager = remember { McpServerManager() }
+                    LaunchedEffect(Unit) {
+                        if (settings.mcpServers.isNotEmpty()) mcpServerManager.reconnectAll(settings.mcpServers)
+                    }
+                    DisposableEffect(Unit) {
+                        onDispose { mcpServerManager.shutdown() }
+                    }
 
                     SedniumApp(
                         chats = chats,
@@ -98,11 +112,16 @@ class MainActivity : ComponentActivity() {
                                 if (it.id == currentChatId) it.copy(messages = it.messages + userMsg, updatedAt = System.currentTimeMillis())
                                 else it
                             }
-                            // Dispatch to your provider-specific streaming client here
-                            // (Kotlin port of services/geminiService.ts), then append the
-                            // streamed ChatMessage(role = Role.MODEL, ...) as chunks arrive.
+                            // Dispatch to your provider-specific streaming client here. For
+                            // tool-using turns, route through mcp.ToolCallOrchestrator, e.g.:
+                            //   val orchestrator = ToolCallOrchestrator(mcpServerManager, yourLlmAdapter)
+                            //   val replyText = orchestrator.run(text)
+                            // `yourLlmAdapter` implements ToolCallingChatClient for whichever
+                            // provider is active in `settings.provider` (OpenAiToolSchema already
+                            // covers the six OpenAI-compatible providers' tool-call wire format).
                         },
-                        isLoading = isLoading
+                        isLoading = isLoading,
+                        mcpServerManager = mcpServerManager
                     )
                 }
             }

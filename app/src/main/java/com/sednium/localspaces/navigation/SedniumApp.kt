@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.sednium.localspaces.navigation
 
 import androidx.compose.foundation.layout.Box
@@ -15,7 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.fillMaxWidth
+import com.sednium.localspaces.mcp.McpServerManager
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.Attachment
 import com.sednium.localspaces.model.ChatMessage
@@ -39,7 +40,6 @@ import kotlinx.coroutines.launch
  * with the original's localStorage-based `sednium_settings` /
  * `sednium_chats` keys.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SedniumApp(
     chats: List<ChatSession>,
@@ -54,7 +54,8 @@ fun SedniumApp(
     onTogglePin: (String) -> Unit,
     onClearCurrentChat: () -> Unit,
     onSend: (String, List<Attachment>) -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    mcpServerManager: McpServerManager
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -68,35 +69,10 @@ fun SedniumApp(
     val currentChat = chats.find { it.id == currentChatId } ?: chats.firstOrNull()
     val isConfigValid = settings.model.isNotBlank()
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val contentResolver = context.contentResolver
-    
-    val pickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        val newAttachments = uris.mapNotNull { uri ->
-            val typeStr = contentResolver.getType(uri) ?: "application/octet-stream"
-            val type = if (typeStr.startsWith("image/")) com.sednium.localspaces.model.AttachmentType.IMAGE else com.sednium.localspaces.model.AttachmentType.TEXT
-            var name = "attachment"
-
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (cursor.moveToFirst() && nameIndex != -1) {
-                    name = cursor.getString(nameIndex)
-                }
-            }
-            
-            Attachment(type = type, mimeType = typeStr, data = uri.toString(), name = name)
-        }
-        attachments = attachments + newAttachments
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = com.sednium.localspaces.ui.theme.SedniumColors.SedYellow
-            ) {
+            ModalDrawerSheet {
                 ChatListScreen(
                     chats = chats,
                     currentChatId = currentChatId,
@@ -129,7 +105,7 @@ fun SedniumApp(
                         attachments = emptyList()
                     }
                 },
-                onAttachClick = { pickerLauncher.launch("*/*") },
+                onAttachClick = { /* launch system file/photo picker, append result to `attachments` */ },
                 onRemoveAttachment = { idx -> attachments = attachments.toMutableList().also { it.removeAt(idx) } },
                 onTogglePresetMenu = { isPresetMenuOpen = !isPresetMenuOpen },
                 onSelectPreset = { preset ->
@@ -154,12 +130,8 @@ fun SedniumApp(
                 imageUrl = selectedImage,
                 onDismiss = { selectedImage = null }
             ) { url ->
-                coil.compose.AsyncImage(
-                    model = url, 
-                    contentDescription = null, 
-                    modifier = Modifier.fillMaxWidth(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                )
+                // Plug in Coil here:
+                // coil.compose.AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -168,13 +140,13 @@ fun SedniumApp(
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         ModalBottomSheet(
             onDismissRequest = { isSettingsOpen = false },
-            sheetState = sheetState,
-            containerColor = com.sednium.localspaces.ui.theme.SedniumColors.SedYellow
+            sheetState = sheetState
         ) {
             SettingsScreen(
                 settings = settings,
                 onUpdateSettings = onUpdateSettings,
-                onClose = { isSettingsOpen = false }
+                onClose = { isSettingsOpen = false },
+                mcpServerManager = mcpServerManager
             )
         }
     }

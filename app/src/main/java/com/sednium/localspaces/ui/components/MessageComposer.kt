@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.animation.ExperimentalAnimationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.sednium.localspaces.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -51,7 +52,6 @@ import com.sednium.localspaces.ui.theme.popUpSpec
  * chips row, attach + preset-bookmark buttons, auto-growing text field,
  * and a send button that morphs color depending on whether it's armed.
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun MessageComposer(
     input: String,

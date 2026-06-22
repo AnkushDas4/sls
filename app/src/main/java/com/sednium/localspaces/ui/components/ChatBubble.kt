@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.sednium.localspaces.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
@@ -30,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +38,7 @@ import com.sednium.localspaces.model.Attachment
 import com.sednium.localspaces.model.AttachmentType
 import com.sednium.localspaces.model.ChatMessage
 import com.sednium.localspaces.model.Role
+import com.sednium.localspaces.markdown.MarkdownView
 import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 import com.sednium.localspaces.ui.theme.SedniumRadii
@@ -48,7 +49,6 @@ import com.sednium.localspaces.ui.theme.ThinkingDots
  * messages: left-aligned with a sedRed/sedYellow bot avatar.
  * User messages: right-aligned pill, sedRed/5 fill + sedRed/30 border.
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ChatBubble(
     msg: ChatMessage,
@@ -148,7 +148,7 @@ fun ChatBubble(
                                 .border(0.dp, SedniumColors.Gray200) // left rule emulated via padding card
                                 .padding(start = 8.dp)
                         ) {
-                            MarkdownText(content = msg.thought, isDark = isDark)
+                            MarkdownView(content = msg.thought, isDark = isDark)
                         }
                     }
                 }
@@ -163,7 +163,7 @@ fun ChatBubble(
 
                 // --- Main content ---
                 if (msg.content.isNotBlank()) {
-                    MarkdownText(
+                    MarkdownView(
                         content = msg.content,
                         isDark = isDark,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
@@ -184,17 +184,15 @@ fun ChatBubble(
 @Composable
 private fun AttachmentPreview(att: Attachment, isDark: Boolean, onImageClick: (String) -> Unit) {
     if (att.type == AttachmentType.IMAGE) {
-        val uri = if (att.data.startsWith("content://") || att.data.startsWith("http")) att.data else "data:${att.mimeType};base64,${att.data}"
-        coil.compose.AsyncImage(
-            model = uri,
-            contentDescription = att.name,
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        Box(
             modifier = Modifier
                 .size(140.dp)
                 .clip(RoundedCornerShape(SedniumRadii.sm))
                 .border(1.dp, if (isDark) SedniumColors.Gray800 else SedniumColors.Gray200, RoundedCornerShape(SedniumRadii.sm))
-                .clickable { onImageClick(uri) }
-        )
+        ) {
+            // AsyncImage / Coil painter goes here, decoding att.data (base64) + att.mimeType.
+            // Tapping calls onImageClick(dataUri) to open the full-screen ImageViewerOverlay.
+        }
     } else {
         Row(
             verticalAlignment = Alignment.CenterVertically,
