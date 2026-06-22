@@ -1,7 +1,7 @@
 package com.sednium.localspaces
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +17,8 @@ import com.sednium.localspaces.model.ChatSession
 import com.sednium.localspaces.model.Role
 import com.sednium.localspaces.navigation.SedniumApp
 import com.sednium.localspaces.ui.theme.SedniumTheme
+import kotlinx.coroutines.launch
+import com.sednium.localspaces.api.generateContentStream
 
 /**
  * Single-activity host, mirroring the SPA shell index.tsx mounted into.
@@ -24,13 +26,14 @@ import com.sednium.localspaces.ui.theme.SedniumTheme
  * SedniumViewModel backed by DataStore (settings) + Room (chat sessions)
  * for true parity with the original's `localStorage` persistence.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             SedniumTheme(darkTheme = false) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    val scope = androidx.compose.runtime.rememberCoroutineScope()
                     var settings by remember { mutableStateOf(AppSettings()) }
                     var chats by remember {
                         mutableStateOf(
@@ -94,13 +97,60 @@ class MainActivity : ComponentActivity() {
                                 content = text,
                                 attachments = attachments
                             )
+                            val modelMsgId = (System.currentTimeMillis() + 1).toString()
+                            val initialModelMsg = ChatMessage(
+                                id = modelMsgId,
+                                role = Role.MODEL,
+                                content = "",
+                                isThinking = false
+                            )
+                            
+                            val activeChatHistory = chats.find { it.id == currentChatId }?.messages ?: emptyList()
+                            
                             chats = chats.map {
-                                if (it.id == currentChatId) it.copy(messages = it.messages + userMsg, updatedAt = System.currentTimeMillis())
+                                if (it.id == currentChatId) it.copy(
+                                    messages = it.messages + userMsg + initialModelMsg,
+                                    updatedAt = System.currentTimeMillis()
+                                )
                                 else it
                             }
-                            // Dispatch to your provider-specific streaming client here
-                            // (Kotlin port of services/geminiService.ts), then append the
-                            // streamed ChatMessage(role = Role.MODEL, ...) as chunks arrive.
+
+                            isLoading = true
+                            scope.launch {
+                                try {
+                                    val apiKey = com.sednium.localspaces.ui.screens.apiKeyFor(settings)
+                                    if (apiKey.isBlank()) {
+                                        throw Exception("API Key is missing. Please add it in settings.")
+                                    }
+                                    generateContentStream(
+                                        apiKey = apiKey,
+                                        modelName = settings.model,
+                                        prompt = text,
+                                        history = activeChatHistory,
+                                        onChunkReceived = { deltaText, _ ->
+                                            chats = chats.map { chat ->
+                                                if (chat.id == currentChatId) {
+                                                    val newMessages = chat.messages.map { msg ->
+                                                        if (msg.id == modelMsgId) msg.copy(content = msg.content + deltaText) else msg
+                                                    }
+                                                    chat.copy(messages = newMessages, updatedAt = System.currentTimeMillis())
+                                                } else chat
+                                            }
+                                        }
+                                    )
+                                } catch (e: Exception) {
+                                    chats = chats.map { chat ->
+                                        if (chat.id == currentChatId) {
+                                            val newMessages = chat.messages.map { msg ->
+                                                if (msg.id == modelMsgId) msg.copy(content = msg.content + "\nError: ${e.message}", isError = true) else msg
+                                            }
+                                            chat.copy(messages = newMessages)
+                                        } else chat
+                                    }
+                                } finally {
+                                    isLoading = false
+                                }
+                            }
                         },
                         isLoading = isLoading
                     )

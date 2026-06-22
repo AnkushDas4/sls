@@ -1,5 +1,8 @@
 package com.sednium.localspaces.ui.screens
 
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,7 +49,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +76,28 @@ import com.sednium.localspaces.ui.theme.SedniumColors
 
 enum class SettingsTab {
     API_MODELS, FEATURES_GENERAL
+}
+
+fun authenticateWithBiometrics(
+    activity: FragmentActivity,
+    onSuccess: () -> Unit
+) {
+    val executor = ContextCompat.getMainExecutor(activity)
+    val biometricPrompt = BiometricPrompt(activity, executor,
+        object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                onSuccess()
+            }
+        })
+
+    val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        .setTitle("Authentication required")
+        .setSubtitle("Authenticate to view or edit your API Key")
+        .setDeviceCredentialAllowed(true)
+        .build()
+
+    biometricPrompt.authenticate(promptInfo)
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -169,6 +196,9 @@ fun ApiModelsContent(
     localServerStatus: LocalServerStatus,
     onUpdateSettings: (AppSettings) -> Unit
 ) {
+    var apiKeyUnlocked by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     // Provider Dropdown
     SettingsSectionLabel("CHOOSE PROVIDER")
     var expandedProviderDropdown by remember { mutableStateOf(false) }
@@ -210,39 +240,95 @@ fun ApiModelsContent(
     SettingsSectionLabel("${providerName.uppercase()} API KEY")
     SettingsTextField(
         label = "",
-        value = apiKeyFor(settings),
-        onValueChange = { onUpdateSettings(updateApiKeyFor(settings, it)) },
+        value = if (!apiKeyUnlocked && apiKeyFor(settings).isNotEmpty()) "••••••••••••••••••••" else apiKeyFor(settings),
+        onValueChange = { if (apiKeyUnlocked) onUpdateSettings(updateApiKeyFor(settings, it)) },
         placeholder = "sk-…",
-        isSecret = true,
+        isSecret = !apiKeyUnlocked && apiKeyFor(settings).isNotEmpty(),
+        readOnly = !apiKeyUnlocked,
         trailingIcon = {
             Row(modifier = Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "EDIT",
+                    text = if (apiKeyUnlocked) "LOCK" else "EDIT/VIEW",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = SedniumColors.Orange,
-                    modifier = Modifier.clickable { /* Handle edit */ }.padding(4.dp)
+                    modifier = Modifier.clickable {
+                        if (apiKeyUnlocked) {
+                            apiKeyUnlocked = false
+                        } else {
+                            if (context is FragmentActivity) {
+                                authenticateWithBiometrics(context) {
+                                    apiKeyUnlocked = true
+                                }
+                            }
+                        }
+                    }.padding(4.dp)
                 )
-                Text(
-                    text = "CLEAR",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = SedniumColors.Orange,
-                    modifier = Modifier.clickable { onUpdateSettings(updateApiKeyFor(settings, "")) }.padding(4.dp)
-                )
+                if (apiKeyUnlocked) {
+                    Text(
+                        text = "CLEAR",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SedniumColors.Orange,
+                        modifier = Modifier.clickable { onUpdateSettings(updateApiKeyFor(settings, "")) }.padding(4.dp)
+                    )
+                }
             }
         }
     )
     val apiLink = PROVIDER_CONFIG[settings.provider]?.apiLink
-    if (!apiLink.isNullOrBlank()) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        TextButton(
-            onClick = {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(apiLink))
-                context.startActivity(intent)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (!apiLink.isNullOrBlank()) {
+            TextButton(
+                onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(apiLink))
+                    context.startActivity(intent)
+                }
+            ) {
+                Text("Get API Key", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange, fontWeight = FontWeight.Bold)
             }
-        ) {
-            Text("Get API Key", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange, fontWeight = FontWeight.Bold)
+        } else {
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
+        var testConnectionStatus by remember { mutableStateOf<String?>(null) }
+        var isTestingConnection by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (testConnectionStatus != null) {
+                Text(
+                    text = testConnectionStatus!!,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (testConnectionStatus == "Success") Color(0xFF4CAF50) else Color(0xFFF44336),
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+            TextButton(
+                enabled = !isTestingConnection && apiKeyFor(settings).isNotBlank(),
+                onClick = {
+                    val apiKeyToTest = apiKeyFor(settings)
+                    val providerToTest = settings.provider
+                    isTestingConnection = true
+                    testConnectionStatus = "Testing..."
+                    scope.launch {
+                        try {
+                            val success = com.sednium.localspaces.api.testApiKey(apiKeyToTest, providerToTest)
+                            testConnectionStatus = if (success) "Success" else "Failed"
+                        } catch (e: Exception) {
+                            testConnectionStatus = "Failed"
+                        } finally {
+                            isTestingConnection = false
+                        }
+                    }
+                }
+            ) {
+                Text(if (isTestingConnection) "Testing..." else "Test Connection", style = MaterialTheme.typography.labelSmall, color = if (apiKeyFor(settings).isNotBlank()) SedniumColors.Orange else Color.Gray, fontWeight = FontWeight.Bold)
+            }
         }
     }
 
@@ -502,7 +588,7 @@ fun FeaturesGeneralContent(
     }
 }
 
-private fun apiKeyFor(s: AppSettings): String = when (s.provider) {
+fun apiKeyFor(s: AppSettings): String = when (s.provider) {
     ModelProvider.GOOGLE -> s.googleApiKey
     ModelProvider.OPENAI -> s.openaiApiKey
     ModelProvider.ANTHROPIC -> s.anthropicApiKey

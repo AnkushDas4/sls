@@ -139,11 +139,11 @@ fun ChatListScreen(
             },
             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = SedniumColors.Orange,
-                unfocusedBorderColor = SedniumColors.Gray700,
-                focusedTextColor = SedniumColors.Gray100, // Fixed this to be visible in dark mode, or use Gray800 in light mode
-                unfocusedTextColor = SedniumColors.Gray200,
-                focusedContainerColor = SedniumColors.DarkSurfaceAlt,
-                unfocusedContainerColor = SedniumColors.DarkSurfaceAlt
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent
             ),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
@@ -180,6 +180,7 @@ fun ChatListScreen(
         if (chatToRename != null) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { chatToRename = null },
+                shape = RoundedCornerShape(16.dp),
                 title = { Text("Rename Chat", color = SedniumColors.Orange) },
                 text = {
                     androidx.compose.material3.OutlinedTextField(
@@ -188,8 +189,8 @@ fun ChatListScreen(
                         singleLine = true,
                         colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = SedniumColors.Orange,
-                            focusedTextColor = SedniumColors.White,
-                            unfocusedTextColor = SedniumColors.White
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )

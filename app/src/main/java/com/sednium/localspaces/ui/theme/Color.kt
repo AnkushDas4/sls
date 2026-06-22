@@ -21,6 +21,9 @@ object SedniumColors {
     val Milk = Color(0xFFFDFBF7)   // primary light background / "paper"
     val Orange    = Color(0xFFEC5E27)   // primary accent / ink / CTA
 
+    val SedYellow = Milk
+    val SedRed = Orange
+
     // ---- Theme-aware surfaces ----
     val DarkBackground   = Color(0xFF121212)  // .dark body background-color
     val DarkSurfaceAlt   = Color(0xFF2A2B32)  // dark file-chip / card surface (MessageItem)
@@ -76,3 +79,5 @@ object OrangeAlpha {
     val a70 = SedniumColors.Orange.alpha(0.70f)
     val a90 = SedniumColors.Orange.alpha(0.90f)
 }
+
+val SedRedAlpha = OrangeAlpha

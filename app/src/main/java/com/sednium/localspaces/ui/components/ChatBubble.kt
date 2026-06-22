@@ -78,7 +78,8 @@ fun ChatBubble(
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.weight(1f, fill = false)
         ) {
             if (isModel) {
                 Box(
@@ -95,10 +96,10 @@ fun ChatBubble(
             Column(
                 modifier = if (!isModel) {
                     Modifier
-                        .clip(RoundedCornerShape(SedniumRadii.pill))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(OrangeAlpha.a05)
-                        .border(1.dp, OrangeAlpha.a30, RoundedCornerShape(SedniumRadii.pill))
-                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .border(1.dp, OrangeAlpha.a30, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 } else {
                     Modifier.padding(vertical = 2.dp)
                 }
@@ -185,7 +186,7 @@ fun ChatBubble(
                                 .border(0.dp, SedniumColors.Gray200) // left rule emulated via padding card
                                 .padding(start = 8.dp)
                         ) {
-                            MarkdownText(content = msg.thought, isDark = isDark)
+                            com.sednium.localspaces.markdown.MarkdownView(content = msg.thought, isDark = isDark)
                         }
                     }
                 }
@@ -231,7 +232,7 @@ fun ChatBubble(
 
                 // --- Main content ---
                 if (msg.content.isNotBlank()) {
-                    MarkdownText(
+                    com.sednium.localspaces.markdown.MarkdownView(
                         content = msg.content,
                         isDark = isDark,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)

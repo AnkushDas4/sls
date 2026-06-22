@@ -35,12 +35,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sednium.localspaces.model.Attachment
 import com.sednium.localspaces.model.AttachmentType
 import com.sednium.localspaces.model.SavedModelPreset
-import com.sednium.localspaces.ui.theme.OrangeAlpha
+import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 import com.sednium.localspaces.ui.theme.SedniumRadii
 import com.sednium.localspaces.ui.theme.SpinningIcon
@@ -51,7 +52,7 @@ import com.sednium.localspaces.ui.theme.popUpSpec
  * chips row, attach + preset-bookmark buttons, auto-growing text field,
  * and a send button that morphs color depending on whether it's armed.
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageComposer(
     input: String,
@@ -73,8 +74,8 @@ fun MessageComposer(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(SedniumRadii.pill))
-            .background(SedniumColors.Milk)
-            .border(1.dp, OrangeAlpha.a30, RoundedCornerShape(SedniumRadii.pill))
+            .background(SedniumColors.SedYellow)
+            .border(1.dp, SedRedAlpha.a30, RoundedCornerShape(SedniumRadii.pill))
             .padding(6.dp)
     ) {
         // --- Attachment chips ---
@@ -89,17 +90,17 @@ fun MessageComposer(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(SedniumRadii.sm))
-                            .background(OrangeAlpha.a10)
-                            .border(1.dp, OrangeAlpha.a20, RoundedCornerShape(SedniumRadii.sm))
+                            .background(SedRedAlpha.a10)
+                            .border(1.dp, SedRedAlpha.a20, RoundedCornerShape(SedniumRadii.sm))
                             .padding(start = 8.dp, end = 28.dp, top = 6.dp, bottom = 6.dp)
                     ) {
                         Text(
                             if (att.type == AttachmentType.IMAGE) "IMG" else att.name.substringAfterLast('.', "TXT").uppercase().take(4),
-                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = SedniumColors.Orange
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = SedniumColors.SedRed
                         )
-                        Text(att.name, style = MaterialTheme.typography.bodySmall, color = SedniumColors.Orange, maxLines = 1)
+                        Text(att.name, style = MaterialTheme.typography.bodySmall, color = SedniumColors.SedRed, maxLines = 1)
                         IconButton(onClick = { onRemoveAttachment(idx) }, modifier = Modifier.size(18.dp)) {
-                            Icon(Icons.Filled.Close, contentDescription = "Remove", tint = OrangeAlpha.a60, modifier = Modifier.size(12.dp))
+                            Icon(Icons.Filled.Close, contentDescription = "Remove", tint = SedRedAlpha.a60, modifier = Modifier.size(12.dp))
                         }
                     }
                 }
@@ -108,7 +109,7 @@ fun MessageComposer(
 
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onAttachClick, enabled = !isLoading) {
-                Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = SedniumColors.Orange.copy(alpha = 0.7f))
+                Icon(Icons.Filled.AttachFile, contentDescription = "Attach", tint = SedniumColors.SedRed.copy(alpha = 0.7f))
             }
 
             Box {
@@ -116,7 +117,7 @@ fun MessageComposer(
                     Icon(
                         Icons.Filled.Bookmark,
                         contentDescription = "Presets",
-                        tint = SedniumColors.Orange.copy(alpha = if (isPresetMenuOpen) 1f else 0.7f)
+                        tint = SedniumColors.SedRed.copy(alpha = if (isPresetMenuOpen) 1f else 0.7f)
                     )
                 }
                 androidx.compose.animation.AnimatedVisibility(
@@ -134,16 +135,16 @@ fun MessageComposer(
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(max = 150.dp),
-                placeholder = { Text("Message…", color = SedniumColors.Orange.copy(alpha = 0.5f)) },
+                placeholder = { Text("Message…", color = SedniumColors.SedRed.copy(alpha = 0.5f)) },
                 enabled = !isLoading,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = SedniumColors.Orange,
-                    unfocusedTextColor = SedniumColors.Orange,
-                    cursorColor = SedniumColors.Orange
+                    focusedTextColor = SedniumColors.SedRed,
+                    unfocusedTextColor = SedniumColors.SedRed,
+                    cursorColor = SedniumColors.SedRed
                 ),
                 textStyle = MaterialTheme.typography.bodyLarge
             )
@@ -152,19 +153,19 @@ fun MessageComposer(
                 modifier = Modifier
                     .padding(4.dp)
                     .clip(CircleShape)
-                    .background(if (canSend) SedniumColors.Orange else OrangeAlpha.a10)
+                    .background(if (canSend) SedniumColors.SedRed else SedRedAlpha.a10)
                     .let { if (canSend) it else it } // shadow omitted for native simplicity
                     .size(40.dp),
                 contentAlignment = Alignment.Center
             ) {
                 IconButton(onClick = onSend, enabled = canSend) {
                     if (isLoading) {
-                        SpinningIcon(icon = Icons.Filled.Refresh, tint = SedniumColors.Orange)
+                        SpinningIcon(icon = Icons.Filled.Refresh, tint = SedniumColors.SedRed)
                     } else {
                         Icon(
                             Icons.Filled.Send,
                             contentDescription = "Send",
-                            tint = if (canSend) SedniumColors.Milk else OrangeAlpha.a40
+                            tint = if (canSend) SedniumColors.SedYellow else SedRedAlpha.a40
                         )
                     }
                 }
@@ -183,8 +184,8 @@ private fun PresetMenu(
         modifier = Modifier
             .padding(bottom = 8.dp)
             .clip(RoundedCornerShape(SedniumRadii.lg))
-            .background(SedniumColors.Milk)
-            .border(1.dp, OrangeAlpha.a20, RoundedCornerShape(SedniumRadii.lg))
+            .background(SedniumColors.SedYellow)
+            .border(1.dp, SedRedAlpha.a20, RoundedCornerShape(SedniumRadii.lg))
             .heightIn(max = 240.dp)
             .padding(8.dp)
     ) {
@@ -192,13 +193,13 @@ private fun PresetMenu(
             Text(
                 "No saved configurations. Save presets from Settings > Behavior.",
                 style = MaterialTheme.typography.labelSmall,
-                color = OrangeAlpha.a70
+                color = SedRedAlpha.a70
             )
         } else {
             Text(
                 "SAVED CONFIGURATIONS",
                 style = MaterialTheme.typography.labelSmall,
-                color = OrangeAlpha.a70,
+                color = SedRedAlpha.a70,
                 modifier = Modifier.padding(bottom = 6.dp)
             )
             presets.forEach { preset ->
@@ -207,21 +208,21 @@ private fun PresetMenu(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(SedniumRadii.sm))
-                        .background(if (isActive) OrangeAlpha.a10 else Color.Transparent)
+                        .background(if (isActive) SedRedAlpha.a10 else Color.Transparent)
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text(preset.name, color = SedniumColors.Orange, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                        Text(preset.model, color = OrangeAlpha.a60, style = MaterialTheme.typography.labelSmall)
+                        Text(preset.name, color = SedniumColors.SedRed, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        Text(preset.model, color = SedRedAlpha.a60, style = MaterialTheme.typography.labelSmall)
                     }
                     Text(
                         preset.chatMode.name,
                         style = MaterialTheme.typography.labelSmall,
-                        color = SedniumColors.Milk,
+                        color = SedniumColors.SedYellow,
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(SedniumColors.Orange)
+                            .background(SedniumColors.SedRed)
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
