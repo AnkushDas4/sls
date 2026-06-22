@@ -239,18 +239,25 @@ fun SedniumApp(
     }
 
     if (isSettingsOpen) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { isSettingsOpen = false },
             sheetState = sheetState,
             containerColor = com.sednium.localspaces.ui.theme.SedniumColors.Milk,
+            modifier = Modifier.fillMaxSize(),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
         ) {
             SettingsScreen(
                 settings = settings,
                 localServerStatus = localServerStatus,
                 onUpdateSettings = onUpdateSettings,
-                onClose = { isSettingsOpen = false }
+                onClose = { 
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        if (!sheetState.isVisible) {
+                            isSettingsOpen = false
+                        }
+                    }
+                }
             )
         }
     }

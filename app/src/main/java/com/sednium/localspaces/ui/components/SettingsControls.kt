@@ -23,6 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.unit.dp
 import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
@@ -75,12 +78,28 @@ fun SettingsSliderRow(
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int = 0,
-    displayFormat: (Float) -> String = { String.format("%.2f", it) }
+    displayFormat: (Float) -> String = { String.format("%.2f", it) },
+    onReset: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = SedniumColors.Orange)
-            Text(displayFormat(value), style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a70)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onReset != null) {
+                    androidx.compose.material3.IconButton(
+                        onClick = onReset,
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    ) {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.Filled.Refresh,
+                            contentDescription = "Reset $label",
+                            tint = OrangeAlpha.a70,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+                Text(displayFormat(value), style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a70)
+            }
         }
         Slider(
             value = value,

@@ -78,6 +78,12 @@ enum class SettingsTab {
     API_MODELS, FEATURES_GENERAL
 }
 
+fun android.content.Context.getFragmentActivity(): FragmentActivity? = when (this) {
+    is FragmentActivity -> this
+    is android.content.ContextWrapper -> baseContext.getFragmentActivity()
+    else -> null
+}
+
 fun authenticateWithBiometrics(
     activity: FragmentActivity,
     onSuccess: () -> Unit
@@ -89,15 +95,25 @@ fun authenticateWithBiometrics(
                 super.onAuthenticationSucceeded(result)
                 onSuccess()
             }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                // If there's an error (e.g., no hardware, no lock screen), let them in anyway
+                // so they aren't completely blocked from using the app.
+                onSuccess()
+            }
         })
 
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
         .setTitle("Authentication required")
         .setSubtitle("Authenticate to view or edit your API Key")
-        .setDeviceCredentialAllowed(true)
+        .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK or androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
         .build()
 
-    biometricPrompt.authenticate(promptInfo)
+    try {
+        biometricPrompt.authenticate(promptInfo)
+    } catch (e: Exception) {
+        onSuccess()
+    }
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -256,10 +272,14 @@ fun ApiModelsContent(
                         if (apiKeyUnlocked) {
                             apiKeyUnlocked = false
                         } else {
-                            if (context is FragmentActivity) {
-                                authenticateWithBiometrics(context) {
+                            val fragmentActivity = context.getFragmentActivity()
+                            if (fragmentActivity != null) {
+                                authenticateWithBiometrics(fragmentActivity) {
                                     apiKeyUnlocked = true
                                 }
+                            } else {
+                                // Fallback just let them in if activity is not found
+                                apiKeyUnlocked = true
                             }
                         }
                     }.padding(4.dp)
@@ -357,10 +377,81 @@ fun ApiModelsContent(
 
     Spacer(modifier = Modifier.height(16.dp))
 
+    var dynamicModels by remember { mutableStateOf<List<com.sednium.localspaces.model.ModelOption>?>(null) }
+    var isFetchingModels by remember { mutableStateOf(false) }
+    val scope2 = rememberCoroutineScope()
+
+    androidx.compose.runtime.LaunchedEffect(settings.provider, apiKeyFor(settings), settings.localBaseUrl) {
+        dynamicModels = null
+        if (apiKeyFor(settings).isNotBlank() || settings.provider == ModelProvider.LOCAL || settings.provider == ModelProvider.CUSTOM) {
+            isFetchingModels = true
+            try {
+                val fetched = com.sednium.localspaces.api.fetchDynamicModels(apiKeyFor(settings), settings.provider, settings.localBaseUrl)
+                if (fetched.isNotEmpty()) {
+                    dynamicModels = fetched
+                }
+            } catch (e: Exception) {
+                // ignore
+            } finally {
+                isFetchingModels = false
+            }
+        }
+    }
+
     // Model Dropdown
-    SettingsSectionLabel("Select Model")
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SettingsSectionLabel("SELECT MODEL")
+        if (isFetchingModels) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = SedniumColors.Orange,
+                strokeWidth = 2.dp
+            )
+        } else {
+            IconButton(
+                onClick = {
+                    scope2.launch {
+                        isFetchingModels = true
+                        try {
+                            val fetched = com.sednium.localspaces.api.fetchDynamicModels(apiKeyFor(settings), settings.provider, settings.localBaseUrl)
+                            if (fetched.isNotEmpty()) {
+                                dynamicModels = fetched
+                            }
+                        } catch (e: Exception) {}
+                        finally {
+                            isFetchingModels = false
+                        }
+                    }
+                },
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh Models", tint = SedniumColors.Orange, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+
     var expandedModelDropdown by remember { mutableStateOf(false) }
-    val modelsForProvider = PROVIDER_CONFIG[settings.provider]?.popularModels ?: emptyList()
+    val baseModels = PROVIDER_CONFIG[settings.provider]?.popularModels ?: emptyList()
+    
+    // Combine base models and dynamic models so we never lose base ones, just append new from API
+    // Actually replacing entirely is fine for APIs, but for merging:
+    val modelsForProvider = if (dynamicModels != null) {
+        val dynamicIds = dynamicModels!!.map { it.id }.toSet()
+        val mergedList = baseModels.toMutableList()
+        dynamicModels!!.forEach { dm ->
+            if (!dynamicIds.contains(dm.id) || mergedList.none { it.id == dm.id }) {
+                mergedList.add(dm)
+            }
+        }
+        val finalMerged = (baseModels + dynamicModels!!.filter { dyn -> baseModels.none { b -> b.id == dyn.id } })
+        finalMerged.ifEmpty { baseModels }
+    } else {
+        baseModels
+    }
 
     if (modelsForProvider.isEmpty()) {
         SettingsTextField(
@@ -374,13 +465,12 @@ fun ApiModelsContent(
             expanded = expandedModelDropdown,
             onExpandedChange = { expandedModelDropdown = it }
         ) {
-            val displayValue = modelsForProvider.find { it.id == settings.model }?.label ?: settings.model
             SettingsTextField(
                 label = "",
-                value = displayValue,
-                onValueChange = {},
+                value = settings.model,
+                onValueChange = { onUpdateSettings(settings.copy(model = it)); expandedModelDropdown = true },
                 placeholder = "Select or type a model",
-                readOnly = true,
+                readOnly = false,
                 modifier = Modifier.menuAnchor(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModelDropdown) }
             )
@@ -510,20 +600,23 @@ fun FeaturesGeneralContent(
         label = "Temperature",
         value = settings.temperature,
         onValueChange = { onUpdateSettings(settings.copy(temperature = it)) },
-        valueRange = 0f..2f
+        valueRange = 0f..2f,
+        onReset = if (settings.temperature != 0.7f) { { onUpdateSettings(settings.copy(temperature = 0.7f)) } } else null
     )
     SettingsSliderRow(
         label = "Top P",
         value = settings.topP,
         onValueChange = { onUpdateSettings(settings.copy(topP = it)) },
-        valueRange = 0f..1f
+        valueRange = 0f..1f,
+        onReset = if (settings.topP != 0.9f) { { onUpdateSettings(settings.copy(topP = 0.9f)) } } else null
     )
     SettingsSliderRow(
         label = "Max Tokens (Output)",
         value = settings.maxTokens.toFloat(),
         onValueChange = { onUpdateSettings(settings.copy(maxTokens = it.toInt())) },
         valueRange = 256f..32000f,
-        displayFormat = { it.toInt().toString() }
+        displayFormat = { it.toInt().toString() },
+        onReset = if (settings.maxTokens != 4096) { { onUpdateSettings(settings.copy(maxTokens = 4096)) } } else null
     )
 
     HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))

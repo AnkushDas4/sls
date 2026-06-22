@@ -63,6 +63,8 @@ fun ChatListScreen(
     var chatToRename by remember { mutableStateOf<ChatSession?>(null) }
     var newTitle by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
+    var showDeleteConfirmDialog by remember { mutableStateOf<String?>(null) }
+    var showMultiDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val sortedChats = remember(chats) {
         chats.sortedWith(compareByDescending<ChatSession> { it.isPinned }.thenByDescending { it.updatedAt })
@@ -172,7 +174,7 @@ fun ChatListScreen(
                         chatToRename = chat
                         newTitle = chat.title
                     },
-                    onDelete = { onDeleteChat(chat.id) }
+                    onDelete = { showDeleteConfirmDialog = chat.id }
                 )
             }
         }
@@ -214,13 +216,57 @@ fun ChatListScreen(
             )
         }
 
+        if (showDeleteConfirmDialog != null) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showDeleteConfirmDialog = null },
+                title = { Text("Delete Chat", color = SedniumColors.Orange) },
+                text = { Text("Are you sure you want to delete this chat?", color = MaterialTheme.colorScheme.onSurface) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDeleteConfirmDialog?.let { id -> onDeleteChat(id) }
+                        showDeleteConfirmDialog = null
+                    }) {
+                        Text("Delete", color = SedniumColors.Red600)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmDialog = null }) {
+                        Text("Cancel", color = SedniumColors.Orange)
+                    }
+                },
+                containerColor = SedniumColors.Milk
+            )
+        }
+
+        if (showMultiDeleteConfirmDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showMultiDeleteConfirmDialog = false },
+                title = { Text("Delete Chats", color = SedniumColors.Orange) },
+                text = { Text("Are you sure you want to delete ${selectedIds.size} selected chats?", color = MaterialTheme.colorScheme.onSurface) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onDeleteMultiple(selectedIds.toList())
+                        selectedIds = emptySet()
+                        isSelectionMode = false
+                        showMultiDeleteConfirmDialog = false
+                    }) {
+                        Text("Delete", color = SedniumColors.Red600)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showMultiDeleteConfirmDialog = false }) {
+                        Text("Cancel", color = SedniumColors.Orange)
+                    }
+                },
+                containerColor = SedniumColors.Milk
+            )
+        }
+
         // --- Delete selected bar ---
         AnimatedVisibility(visible = isSelectionMode && selectedIds.isNotEmpty(), enter = slideInVertically { it }) {
             Button(
                 onClick = {
-                    onDeleteMultiple(selectedIds.toList())
-                    selectedIds = emptySet()
-                    isSelectionMode = false
+                    showMultiDeleteConfirmDialog = true
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = SedniumColors.Red600, contentColor = SedniumColors.White),
                 shape = RoundedCornerShape(14.dp),

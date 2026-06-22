@@ -113,8 +113,33 @@ fun SedniumTopBar(
                 Icon(Icons.Filled.Share, contentDescription = "Export chat", tint = SedniumColors.Orange)
             }
         }
+        
+        val showClearConfirmDialog = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+        if (showClearConfirmDialog.value) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showClearConfirmDialog.value = false },
+                title = { Text("Clear Chat", color = SedniumColors.Orange) },
+                text = { Text("Are you sure you want to clear all messages in this chat?", color = MaterialTheme.colorScheme.onSurface) },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        onClearClick()
+                        showClearConfirmDialog.value = false
+                    }) {
+                        Text("Clear", color = SedniumColors.Red600)
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showClearConfirmDialog.value = false }) {
+                        Text("Cancel", color = SedniumColors.Orange)
+                    }
+                },
+                containerColor = SedniumColors.Milk
+            )
+        }
+
         if (showClear && !isFocusMode) {
-            IconButton(onClick = onClearClick) {
+            IconButton(onClick = { showClearConfirmDialog.value = true }) {
                 Icon(Icons.Filled.Delete, contentDescription = "Clear chat", tint = SedniumColors.Orange)
             }
         }
