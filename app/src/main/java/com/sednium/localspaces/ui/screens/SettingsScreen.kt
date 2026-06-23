@@ -46,6 +46,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.ChatMode
@@ -121,6 +123,8 @@ fun authenticateWithBiometrics(
 fun SettingsScreen(
     settings: AppSettings,
     localServerStatus: LocalServerStatus = LocalServerStatus.UNKNOWN,
+    mcpServerManager: com.sednium.localspaces.mcp.McpServerManager,
+    onOpenMcpServers: () -> Unit,
     onUpdateSettings: (AppSettings) -> Unit,
     onClose: () -> Unit
 ) {
@@ -178,7 +182,7 @@ fun SettingsScreen(
         ) {
             when (currentTab) {
                 SettingsTab.API_MODELS -> ApiModelsContent(settings, localServerStatus, onUpdateSettings)
-                SettingsTab.FEATURES_GENERAL -> FeaturesGeneralContent(settings, onUpdateSettings)
+                SettingsTab.FEATURES_GENERAL -> FeaturesGeneralContent(settings, mcpServerManager, onOpenMcpServers, onUpdateSettings)
                 SettingsTab.USAGE -> UsageContent(settings)
             }
         }
@@ -585,6 +589,8 @@ fun ApiModelsContent(
 @Composable
 fun FeaturesGeneralContent(
     settings: AppSettings,
+    mcpServerManager: com.sednium.localspaces.mcp.McpServerManager,
+    onOpenMcpServers: () -> Unit,
     onUpdateSettings: (AppSettings) -> Unit
 ) {
     SettingsSectionLabel("BEHAVIOR MODE")
@@ -662,6 +668,41 @@ fun FeaturesGeneralContent(
         onCheckedChange = { onUpdateSettings(settings.copy(enableTools = it)) }
     )
     
+    HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+    
+    // --- MCP Servers ---
+    val mcpStatuses by mcpServerManager.statuses.collectAsState()
+    val connectedCount = mcpStatuses.values.count { it.status == com.sednium.localspaces.model.McpConnectionStatus.CONNECTED }
+    val totalTools = mcpStatuses.values.sumOf { it.tools.size }
+
+    SettingsSectionLabel("MCP SERVERS")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .background(OrangeAlpha.a05)
+            .border(1.dp, OrangeAlpha.a20, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            .clickable(onClick = onOpenMcpServers)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                if (mcpStatuses.isEmpty()) "No MCP servers yet" else "$connectedCount/${mcpStatuses.size} connected",
+                fontWeight = FontWeight.Bold,
+                color = SedniumColors.Orange,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                if (mcpStatuses.isEmpty()) "Tap to add one" else "$totalTools tool${if (totalTools == 1) "" else "s"} available · Tap to manage",
+                style = MaterialTheme.typography.labelSmall,
+                color = OrangeAlpha.a60
+            )
+        }
+        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = OrangeAlpha.a50, modifier = Modifier.size(16.dp))
+    }
+
     HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
     
     // History

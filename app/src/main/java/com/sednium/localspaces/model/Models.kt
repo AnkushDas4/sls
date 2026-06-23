@@ -63,8 +63,13 @@ import kotlinx.serialization.Serializable
 @Serializable data class MCPConfig(
     val id: String,
     val name: String,
-    val url: String
+    val url: String,
+    val authToken: String? = null
 )
+
+enum class McpConnectionStatus {
+    CONNECTING, CONNECTED, ERROR
+}
 
 @Serializable data class SavedModelPreset(
     val id: String,

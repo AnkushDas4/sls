@@ -61,10 +61,13 @@ class MainActivity : FragmentActivity() {
                         storage.saveChats(chats)
                     }
 
+                    val mcpServerManager = remember { com.sednium.localspaces.mcp.McpServerManager() }
+
                     SedniumApp(
                         chats = chats,
                         currentChatId = currentChatId,
                         settings = settings,
+                        mcpServerManager = mcpServerManager,
                         onUpdateSettings = { settings = it },
                         onSelectChat = { id -> currentChatId = id },
                         onNewChat = {

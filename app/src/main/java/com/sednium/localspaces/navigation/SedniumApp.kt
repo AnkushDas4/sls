@@ -56,6 +56,7 @@ fun SedniumApp(
     chats: List<ChatSession>,
     currentChatId: String,
     settings: AppSettings,
+    mcpServerManager: com.sednium.localspaces.mcp.McpServerManager,
     onUpdateSettings: (AppSettings) -> Unit,
     onSelectChat: (String) -> Unit,
     onNewChat: () -> Unit,
@@ -238,6 +239,9 @@ fun SedniumApp(
         }
     }
 
+    var showMcpServers by remember { mutableStateOf(false) }
+    var showAddMcpServer by remember { mutableStateOf(false) }
+
     if (isSettingsOpen) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -250,6 +254,8 @@ fun SedniumApp(
             SettingsScreen(
                 settings = settings,
                 localServerStatus = localServerStatus,
+                mcpServerManager = mcpServerManager,
+                onOpenMcpServers = { showMcpServers = true },
                 onUpdateSettings = onUpdateSettings,
                 onClose = { 
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -260,5 +266,51 @@ fun SedniumApp(
                 }
             )
         }
+    }
+
+    if (showMcpServers) {
+        val mcpSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showMcpServers = false },
+            sheetState = mcpSheetState,
+            containerColor = com.sednium.localspaces.ui.theme.SedniumColors.SedYellow,
+            modifier = Modifier.fillMaxSize(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+        ) {
+            com.sednium.localspaces.ui.screens.McpServersScreen(
+                mcpServerManager = mcpServerManager,
+                configs = settings.mcpServers,
+                onAddClick = { showAddMcpServer = true },
+                onRemove = { serverId ->
+                    onUpdateSettings(settings.copy(mcpServers = settings.mcpServers.filter { it.id != serverId }))
+                    mcpServerManager.disconnect(serverId)
+                },
+                onReconnectAll = { mcpServerManager.reconnectAll(settings.mcpServers) },
+                onClose = {
+                    scope.launch { mcpSheetState.hide() }.invokeOnCompletion {
+                        if (!mcpSheetState.isVisible) {
+                            showMcpServers = false
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+    if (showAddMcpServer) {
+        com.sednium.localspaces.ui.components.AddMcpServerDialog(
+            onDismiss = { showAddMcpServer = false },
+            onAdd = { name, url, authToken ->
+                val newConfig = com.sednium.localspaces.model.MCPConfig(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = name,
+                    url = url,
+                    authToken = authToken
+                )
+                onUpdateSettings(settings.copy(mcpServers = settings.mcpServers + newConfig))
+                mcpServerManager.connect(newConfig)
+                showAddMcpServer = false
+            }
+        )
     }
 }
