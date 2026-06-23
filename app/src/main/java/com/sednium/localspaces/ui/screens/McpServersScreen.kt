@@ -2,6 +2,7 @@ package com.sednium.localspaces.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,11 +41,40 @@ import com.sednium.localspaces.model.McpConnectionStatus
 import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
+data class McpPreset(
+    val name: String,
+    val description: String,
+    val url: String,
+    val requiresAuth: Boolean
+)
+
+val MCP_PRESETS = listOf(
+    McpPreset(
+        name = "Brave Search",
+        description = "Web search & summarization via Brave's secure API.",
+        url = "https://brave.mcp.example.com",
+        requiresAuth = true
+    ),
+    McpPreset(
+        name = "GitHub",
+        description = "Read, search, and comment on repositories and issues.",
+        url = "https://github.mcp.example.com",
+        requiresAuth = true
+    ),
+    McpPreset(
+        name = "Local File System",
+        description = "Read and write access to your configured local directories.",
+        url = "http://localhost:3000",
+        requiresAuth = false
+    )
+)
+
 @Composable
 fun McpServersScreen(
     mcpServerManager: McpServerManager,
     configs: List<MCPConfig>,
     onAddClick: () -> Unit,
+    onPresetClick: (String, String) -> Unit,
     onRemove: (String) -> Unit,
     onReconnectAll: () -> Unit,
     onClose: () -> Unit
@@ -84,7 +114,9 @@ fun McpServersScreen(
 
         if (configs.isEmpty()) {
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -96,8 +128,12 @@ fun McpServersScreen(
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.weight(1f)
             ) {
+                item {
+                    Text("Your Servers", style = MaterialTheme.typography.labelMedium, color = OrangeAlpha.a60, modifier = Modifier.padding(bottom = 4.dp))
+                }
                 items(configs) { config ->
                     val statusInfo = statuses[config.id]
                     McpServerCard(
@@ -107,6 +143,35 @@ fun McpServersScreen(
                         toolCount = statusInfo?.tools?.size ?: 0,
                         onRemove = { onRemove(config.id) }
                     )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Marketplace Presets", style = MaterialTheme.typography.labelMedium, color = OrangeAlpha.a60, modifier = Modifier.padding(bottom = 8.dp))
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(if (configs.isEmpty()) 2f else 1f)
+        ) {
+            items(MCP_PRESETS) { preset ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(OrangeAlpha.a05)
+                        .clickable { onPresetClick(preset.name, preset.url) }
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(preset.name, fontWeight = FontWeight.Bold, color = SedniumColors.Orange)
+                        Text(preset.description, style = MaterialTheme.typography.labelSmall, color = OrangeAlpha.a60)
+                        if (preset.requiresAuth) {
+                            Text("Requires Auth", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange, modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                    Icon(Icons.Filled.Add, contentDescription = "Add Preset", tint = SedniumColors.Orange)
                 }
             }
         }

@@ -168,7 +168,18 @@ suspend fun generateContentStream(
                 }
             }
         } catch (e: Exception) {
-            onChunkReceived("Error: ${e.message}\n", null)
+            val errorMsg = if (e is retrofit2.HttpException) {
+                try {
+                    val errorBody = e.response()?.errorBody()?.string()
+                    if (errorBody != null) {
+                        try {
+                            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.parseToJsonElement(errorBody).jsonObject
+                            json["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content ?: "HTTP ${e.code()}"
+                        } catch (ex: Exception) { "HTTP ${e.code()}" }
+                    } else "HTTP ${e.code()}"
+                } catch (ex: Exception) { "HTTP ${e.code()}" }
+            } else e.message
+            onChunkReceived("Error: $errorMsg\n", null)
         }
     } else if (provider == com.sednium.localspaces.model.ModelProvider.ANTHROPIC) {
         val messagesArray = kotlinx.serialization.json.buildJsonArray {
@@ -218,7 +229,18 @@ suspend fun generateContentStream(
                 }
             }
         } catch (e: Exception) {
-            onChunkReceived("Error: ${e.message}\n", null)
+            val errorMsg = if (e is retrofit2.HttpException) {
+                try {
+                    val errorBody = e.response()?.errorBody()?.string()
+                    if (errorBody != null) {
+                        try {
+                            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.parseToJsonElement(errorBody).jsonObject
+                            json["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content ?: "HTTP ${e.code()}"
+                        } catch (ex: Exception) { "HTTP ${e.code()}" }
+                    } else "HTTP ${e.code()}"
+                } catch (ex: Exception) { "HTTP ${e.code()}" }
+            } else e.message
+            onChunkReceived("Error: $errorMsg\n", null)
         }
     } else {
         // OpenAI format fallback for other providers
@@ -267,7 +289,18 @@ suspend fun generateContentStream(
                 }
             }
         } catch (e: Exception) {
-            onChunkReceived("Error: ${e.message}\n", null)
+            val errorMsg = if (e is retrofit2.HttpException) {
+                try {
+                    val errorBody = e.response()?.errorBody()?.string()
+                    if (errorBody != null) {
+                        try {
+                            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.parseToJsonElement(errorBody).jsonObject
+                            json["error"]?.jsonObject?.get("message")?.jsonPrimitive?.content ?: "HTTP ${e.code()}"
+                        } catch (ex: Exception) { "HTTP ${e.code()}" }
+                    } else "HTTP ${e.code()}"
+                } catch (ex: Exception) { "HTTP ${e.code()}" }
+            } else e.message
+            onChunkReceived("Error: $errorMsg\n", null)
         }
     }
 }

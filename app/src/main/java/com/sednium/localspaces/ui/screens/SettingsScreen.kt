@@ -782,33 +782,28 @@ private fun updateApiKeyFor(s: AppSettings, value: String): AppSettings = when (
 @Composable
 fun UsageContent(settings: AppSettings) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        SettingsSectionLabel("TOKEN USAGE (SIMULATED LAST 7 DAYS)")
+        SettingsSectionLabel("TOKEN USAGE & QUOTA")
         Spacer(modifier = Modifier.height(16.dp))
 
-        val geminiData = listOf(1200f, 3000f, 2500f, 4000f, 1500f, 2000f, 5000f)
-        val claudeData = listOf(0f, 1000f, 500f, 800f, 2000f, 300f, 100f)
-        
-        Text("Gemini Models", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        com.patrykandpatrick.vico.compose.chart.Chart(
-            chart = com.patrykandpatrick.vico.compose.chart.column.columnChart(),
-            model = com.patrykandpatrick.vico.core.entry.entryModelOf(*geminiData.toTypedArray()),
-            startAxis = com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis(),
-            bottomAxis = com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis()
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Text("Claude Models", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        com.patrykandpatrick.vico.compose.chart.Chart(
-            chart = com.patrykandpatrick.vico.compose.chart.column.columnChart(),
-            model = com.patrykandpatrick.vico.core.entry.entryModelOf(*claudeData.toTypedArray()),
-            startAxis = com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis(),
-            bottomAxis = com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis()
-        )
+        androidx.compose.material3.Surface(
+            color = com.sednium.localspaces.ui.theme.OrangeAlpha.a05,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, com.sednium.localspaces.ui.theme.OrangeAlpha.a20),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.Description, contentDescription = "Info", tint = SedniumColors.Orange)
+                    Text("API Limitation Context", color = SedniumColors.Orange, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "You requested to fetch usage data directly using your API key. However, major providers (Google AI Studio, OpenAI, Anthropic) do not provide a public REST API endpoint to securely fetch billing usage, historical token data, or remaining quota using only an inference API key.\n\nTo view your actual real-time token usage and quotas, please visit your provider's respective cloud console or developer dashboard.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = com.sednium.localspaces.ui.theme.OrangeAlpha.a70
+                )
+            }
+        }
     }
 }
 

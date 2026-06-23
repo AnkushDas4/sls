@@ -224,7 +224,7 @@ fun ChatBubble(
 
                 // --- Generating placeholder when there's no content/thought yet ---
                 if (msg.content.isBlank() && msg.thought == null && isGenerating && !msg.isThinking && msg.toolCalls.isEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
                         ThinkingDots(dotColor = SedniumColors.Orange.copy(alpha = 0.5f))
                         Text("Generating…", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange.copy(alpha = 0.5f))
                     }

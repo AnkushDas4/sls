@@ -241,9 +241,11 @@ fun SedniumApp(
 
     var showMcpServers by remember { mutableStateOf(false) }
     var showAddMcpServer by remember { mutableStateOf(false) }
+    var initialMcpName by remember { mutableStateOf("") }
+    var initialMcpUrl by remember { mutableStateOf("https://") }
 
     if (isSettingsOpen) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         ModalBottomSheet(
             onDismissRequest = { isSettingsOpen = false },
             sheetState = sheetState,
@@ -269,7 +271,7 @@ fun SedniumApp(
     }
 
     if (showMcpServers) {
-        val mcpSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val mcpSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         ModalBottomSheet(
             onDismissRequest = { showMcpServers = false },
             sheetState = mcpSheetState,
@@ -280,7 +282,16 @@ fun SedniumApp(
             com.sednium.localspaces.ui.screens.McpServersScreen(
                 mcpServerManager = mcpServerManager,
                 configs = settings.mcpServers,
-                onAddClick = { showAddMcpServer = true },
+                onAddClick = { 
+                    initialMcpName = ""
+                    initialMcpUrl = "https://"
+                    showAddMcpServer = true 
+                },
+                onPresetClick = { name, url ->
+                    initialMcpName = name
+                    initialMcpUrl = url
+                    showAddMcpServer = true
+                },
                 onRemove = { serverId ->
                     onUpdateSettings(settings.copy(mcpServers = settings.mcpServers.filter { it.id != serverId }))
                     mcpServerManager.disconnect(serverId)
@@ -299,6 +310,8 @@ fun SedniumApp(
 
     if (showAddMcpServer) {
         com.sednium.localspaces.ui.components.AddMcpServerDialog(
+            initialName = initialMcpName,
+            initialUrl = initialMcpUrl,
             onDismiss = { showAddMcpServer = false },
             onAdd = { name, url, authToken ->
                 val newConfig = com.sednium.localspaces.model.MCPConfig(

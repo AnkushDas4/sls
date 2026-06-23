@@ -73,9 +73,9 @@ fun MessageComposer(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SedniumRadii.pill))
+            .clip(RoundedCornerShape(24.dp))
             .background(SedniumColors.SedYellow)
-            .border(1.dp, SedRedAlpha.a30, RoundedCornerShape(SedniumRadii.pill))
+            .border(1.dp, SedRedAlpha.a30, RoundedCornerShape(24.dp))
             .padding(6.dp)
     ) {
         // --- Attachment chips ---
@@ -140,10 +140,13 @@ fun MessageComposer(
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
                     focusedTextColor = SedniumColors.SedRed,
                     unfocusedTextColor = SedniumColors.SedRed,
+                    disabledTextColor = SedniumColors.SedRed.copy(alpha = 0.5f),
                     cursorColor = SedniumColors.SedRed
                 ),
                 textStyle = MaterialTheme.typography.bodyLarge
