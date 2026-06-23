@@ -75,7 +75,7 @@ import com.sednium.localspaces.ui.theme.OrangeAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 
 enum class SettingsTab {
-    API_MODELS, FEATURES_GENERAL
+    API_MODELS, FEATURES_GENERAL, USAGE
 }
 
 fun android.content.Context.getFragmentActivity(): FragmentActivity? = when (this) {
@@ -148,10 +148,16 @@ fun SettingsScreen(
                     onClick = { currentTab = SettingsTab.API_MODELS }
                 )
                 SettingsTabButton(
-                    title = "FEATURES & GENERAL",
+                    title = "GENERAL",
                     isSelected = currentTab == SettingsTab.FEATURES_GENERAL,
                     modifier = Modifier.weight(1f),
                     onClick = { currentTab = SettingsTab.FEATURES_GENERAL }
+                )
+                SettingsTabButton(
+                    title = "USAGE",
+                    isSelected = currentTab == SettingsTab.USAGE,
+                    modifier = Modifier.weight(1f),
+                    onClick = { currentTab = SettingsTab.USAGE }
                 )
             }
             IconButton(onClick = onClose) {
@@ -170,10 +176,10 @@ fun SettingsScreen(
                 .animateContentSize()
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            if (currentTab == SettingsTab.API_MODELS) {
-                ApiModelsContent(settings, localServerStatus, onUpdateSettings)
-            } else {
-                FeaturesGeneralContent(settings, onUpdateSettings)
+            when (currentTab) {
+                SettingsTab.API_MODELS -> ApiModelsContent(settings, localServerStatus, onUpdateSettings)
+                SettingsTab.FEATURES_GENERAL -> FeaturesGeneralContent(settings, onUpdateSettings)
+                SettingsTab.USAGE -> UsageContent(settings)
             }
         }
     }
@@ -337,7 +343,7 @@ fun ApiModelsContent(
                     testConnectionStatus = "Testing..."
                     scope.launch {
                         try {
-                            val success = com.sednium.localspaces.api.testApiKey(apiKeyToTest, providerToTest)
+                            val success = com.sednium.localspaces.api.testApiKey(apiKeyToTest, providerToTest, settings.localBaseUrl)
                             testConnectionStatus = if (success) "Success" else "Failed"
                         } catch (e: Exception) {
                             testConnectionStatus = "Failed"
@@ -474,14 +480,41 @@ fun ApiModelsContent(
                 modifier = Modifier.menuAnchor(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedModelDropdown) }
             )
+            var modelSearchQuery by remember { mutableStateOf("") }
             ExposedDropdownMenu(
                 expanded = expandedModelDropdown,
                 onDismissRequest = { expandedModelDropdown = false },
                 modifier = Modifier.background(SedniumColors.Milk)
             ) {
-                modelsForProvider.forEach { modelOption ->
+                androidx.compose.material3.OutlinedTextField(
+                    value = modelSearchQuery,
+                    onValueChange = { modelSearchQuery = it },
+                    placeholder = { Text("Search models...", color = OrangeAlpha.a40) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    singleLine = true,
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SedniumColors.Orange,
+                        unfocusedBorderColor = OrangeAlpha.a30,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+                
+                modelsForProvider.filter {
+                    it.label.contains(modelSearchQuery, ignoreCase = true) || it.id.contains(modelSearchQuery, ignoreCase = true)
+                }.forEach { modelOption ->
                     DropdownMenuItem(
-                        text = { Text(modelOption.label, color = SedniumColors.Orange) },
+                        text = { 
+                            Column {
+                                Text(modelOption.label, color = SedniumColors.Orange)
+                                if (settings.provider == com.sednium.localspaces.model.ModelProvider.LOCAL || dynamicModels?.any { it.id == modelOption.id } == true) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Box(modifier = Modifier.size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(SedniumColors.Green500))
+                                        Text("Ready locally / Fetched", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Green500)
+                                    }
+                                }
+                            }
+                        },
                         leadingIcon = {
                             val iconVector = when(modelOption.icon) {
                                 com.sednium.localspaces.model.ModelIconType.TEXT -> androidx.compose.material.icons.Icons.Default.Notes
@@ -703,5 +736,38 @@ private fun updateApiKeyFor(s: AppSettings, value: String): AppSettings = when (
     ModelProvider.NVIDIA -> s.copy(nvidiaApiKey = value)
     ModelProvider.CUSTOM -> s.copy(customApiKey = value)
     else -> s
+}
+
+@Composable
+fun UsageContent(settings: AppSettings) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingsSectionLabel("TOKEN USAGE (SIMULATED LAST 7 DAYS)")
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val geminiData = listOf(1200f, 3000f, 2500f, 4000f, 1500f, 2000f, 5000f)
+        val claudeData = listOf(0f, 1000f, 500f, 800f, 2000f, 300f, 100f)
+        
+        Text("Gemini Models", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        com.patrykandpatrick.vico.compose.chart.Chart(
+            chart = com.patrykandpatrick.vico.compose.chart.column.columnChart(),
+            model = com.patrykandpatrick.vico.core.entry.entryModelOf(*geminiData.toTypedArray()),
+            startAxis = com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis(),
+            bottomAxis = com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis()
+        )
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text("Claude Models", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        com.patrykandpatrick.vico.compose.chart.Chart(
+            chart = com.patrykandpatrick.vico.compose.chart.column.columnChart(),
+            model = com.patrykandpatrick.vico.core.entry.entryModelOf(*claudeData.toTypedArray()),
+            startAxis = com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis(),
+            bottomAxis = com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis()
+        )
+    }
 }
 

@@ -1,46 +1,49 @@
 package com.sednium.localspaces.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Core domain models for Sednium Local Spaces.
  * Direct Kotlin port of the original `types.ts`.
  */
 
-enum class Role { USER, MODEL }
+@Serializable enum class Role { USER, MODEL }
 
-enum class ChatMode { QUICK, THINKING, CODING }
+@Serializable enum class ChatMode { QUICK, THINKING, CODING }
 
-enum class ModelProvider {
+@Serializable enum class ModelProvider {
     GOOGLE, OPENAI, ANTHROPIC, XAI, GROQ, OPENROUTER, NVIDIA, LOCAL, CUSTOM, BROWSER
 }
 
-enum class AppTheme { LIGHT, DARK }
+@Serializable enum class AppTheme { LIGHT, DARK }
 
-enum class AttachmentType { IMAGE, TEXT }
+@Serializable enum class AttachmentType { IMAGE, TEXT }
 
-data class Attachment(
+@Serializable data class Attachment(
     val type: AttachmentType,
     val mimeType: String,
     val data: String,      // base64 (no prefix) for images, raw text for text files
     val name: String
 )
 
-data class ToolCallState(
+@Serializable data class ToolCallState(
     val command: String,
     val isExecuting: Boolean,
     val success: Boolean
 )
 
-data class Citation(
+@Serializable data class Citation(
     val id: Int,
     val title: String,
     val domain: String,
     val url: String
 )
 
-data class ChatMessage(
+@Serializable data class ChatMessage(
     val id: String,
     val role: Role,
     val content: String,
+    val modelName: String? = null,
     val isError: Boolean = false,
     val attachments: List<Attachment> = emptyList(),
     val thought: String? = null,
@@ -49,7 +52,7 @@ data class ChatMessage(
     val citations: List<Citation> = emptyList()
 )
 
-data class ChatSession(
+@Serializable data class ChatSession(
     val id: String,
     val title: String,
     val messages: List<ChatMessage> = emptyList(),
@@ -57,13 +60,13 @@ data class ChatSession(
     val isPinned: Boolean = false
 )
 
-data class MCPConfig(
+@Serializable data class MCPConfig(
     val id: String,
     val name: String,
     val url: String
 )
 
-data class SavedModelPreset(
+@Serializable data class SavedModelPreset(
     val id: String,
     val name: String,
     val provider: ModelProvider,
@@ -72,14 +75,14 @@ data class SavedModelPreset(
     val systemInstruction: String
 )
 
-data class AppSettings(
+@Serializable data class AppSettings(
     val theme: AppTheme = AppTheme.LIGHT,
     val provider: ModelProvider = ModelProvider.GOOGLE,
 
     val chatMode: ChatMode = ChatMode.QUICK,
     val enableTools: Boolean = true,
     val mcpServers: List<MCPConfig> = emptyList(),
-    val skills: List<Triple<String, String, String>> = emptyList(), // id, name, content
+    val skills: List<Skill> = emptyList(), // Changed to Skill to be serializable safely
     val savedPresets: List<SavedModelPreset> = emptyList(),
     val activePresetId: String? = null,
 
@@ -104,6 +107,9 @@ data class AppSettings(
     val localBaseUrl: String = "http://localhost:11434/v1",
     val customApiKey: String = ""
 )
+
+@Serializable data class Skill(val id: String, val name: String, val content: String)
+
 
 enum class ModelIconType {
     TEXT, CODE, AGENT, IMAGE, VIDEO, AUTO, LIGHTNING

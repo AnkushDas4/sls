@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,26 +30,36 @@ import com.sednium.localspaces.api.generateContentStream
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val storage = StorageHelper(this)
+        val initialSettings = storage.loadSettings()
+        val initialChats = storage.loadChats().ifEmpty {
+            listOf(
+                ChatSession(
+                    id = System.currentTimeMillis().toString(),
+                    title = "New Chat",
+                    messages = emptyList(),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+
         enableEdgeToEdge()
         setContent {
             SedniumTheme(darkTheme = false) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val scope = androidx.compose.runtime.rememberCoroutineScope()
-                    var settings by remember { mutableStateOf(AppSettings()) }
-                    var chats by remember {
-                        mutableStateOf(
-                            listOf(
-                                ChatSession(
-                                    id = System.currentTimeMillis().toString(),
-                                    title = "New Chat",
-                                    messages = emptyList(),
-                                    updatedAt = System.currentTimeMillis()
-                                )
-                            )
-                        )
-                    }
-                    var currentChatId by remember { mutableStateOf(chats.first().id) }
+                    var settings by remember { mutableStateOf(initialSettings) }
+                    var chats by remember { mutableStateOf(initialChats) }
+                    var currentChatId by remember { mutableStateOf(chats.firstOrNull()?.id ?: System.currentTimeMillis().toString()) }
                     var isLoading by remember { mutableStateOf(false) }
+
+                    LaunchedEffect(settings) {
+                        storage.saveSettings(settings)
+                    }
+
+                    LaunchedEffect(chats) {
+                        storage.saveChats(chats)
+                    }
 
                     SedniumApp(
                         chats = chats,
@@ -102,6 +113,7 @@ class MainActivity : FragmentActivity() {
                                 id = modelMsgId,
                                 role = Role.MODEL,
                                 content = "",
+                                modelName = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.displayName ?: settings.model,
                                 isThinking = false
                             )
                             
@@ -127,6 +139,8 @@ class MainActivity : FragmentActivity() {
                                         modelName = settings.model,
                                         prompt = text,
                                         history = activeChatHistory,
+                                        provider = settings.provider,
+                                        baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
                                         onChunkReceived = { deltaText, _ ->
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {

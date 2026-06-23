@@ -107,7 +107,7 @@ fun ChatBubble(
                 if (isModel) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            providerName.uppercase(),
+                            msg.modelName?.uppercase() ?: providerName.uppercase(),
                             style = MaterialTheme.typography.labelSmall,
                             color = SedniumColors.Gray500
                         )
