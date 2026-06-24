@@ -107,7 +107,7 @@ fun ThinkingDots(
             )
             Box(
                 modifier = Modifier
-                    .offset(y = translateY.dp)
+                    .offset(y = (translateY + 2).dp)
                     .size(dotSize)
                     .clip(CircleShape)
                     .background(dotColor)

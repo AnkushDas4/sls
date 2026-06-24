@@ -136,8 +136,10 @@ suspend fun generateContentStream(
     history: List<com.sednium.localspaces.model.ChatMessage>,
     provider: com.sednium.localspaces.model.ModelProvider = com.sednium.localspaces.model.ModelProvider.GOOGLE,
     baseUrl: String = "",
+    systemInstruction: String = "",
     onChunkReceived: (String, String?) -> Unit // (deltaText, deltaThought)
 ) = withContext(Dispatchers.IO) {
+    val cleanApiKey = apiKey.trim()
     if (provider == com.sednium.localspaces.model.ModelProvider.GOOGLE) {
         val contents = history.map { msg ->
             Content(
@@ -146,9 +148,10 @@ suspend fun generateContentStream(
             )
         } + Content("user", listOf(Part(text = prompt)))
 
-        val request = GenerateContentRequest(contents = contents)
+        val sysContent = if (systemInstruction.isNotBlank()) Content("user", listOf(Part(text = systemInstruction))) else null
+        val request = GenerateContentRequest(systemInstruction = sysContent, contents = contents)
         try {
-            val response = RetrofitClient.service.generateContentStream(modelName, apiKey, request)
+            val response = RetrofitClient.service.generateContentStream(modelName, cleanApiKey, request)
             response.byteStream().bufferedReader().use { reader ->
                 var line: String?
                 while (reader.readLine().also { line = it } != null) {
@@ -178,7 +181,13 @@ suspend fun generateContentStream(
                         } catch (ex: Exception) { "HTTP ${e.code()}" }
                     } else "HTTP ${e.code()}"
                 } catch (ex: Exception) { "HTTP ${e.code()}" }
-            } else e.message
+            } else if (e is java.net.SocketTimeoutException) {
+                "Connection timed out. The server might be experiencing high demand."
+            } else if (e is java.net.UnknownHostException) {
+                "Network error: Unable to resolve host."
+            } else {
+                e.message ?: "Unknown error"
+            }
             onChunkReceived("Error: $errorMsg\n", null)
         }
     } else if (provider == com.sednium.localspaces.model.ModelProvider.ANTHROPIC) {
@@ -199,10 +208,13 @@ suspend fun generateContentStream(
             put("stream", kotlinx.serialization.json.JsonPrimitive(true))
             put("max_tokens", kotlinx.serialization.json.JsonPrimitive(4096))
             put("messages", messagesArray)
+            if (systemInstruction.isNotBlank()) {
+                put("system", kotlinx.serialization.json.JsonPrimitive(systemInstruction))
+            }
         }
         val requestBody = okhttp3.RequestBody.create("application/json".toMediaType(), requestJson.toString())
         val endpointUrl = if (baseUrl.endsWith("/")) "${baseUrl}messages" else "$baseUrl/messages"
-        val headers = mapOf("x-api-key" to apiKey, "anthropic-version" to "2023-06-01", "Content-Type" to "application/json")
+        val headers = mapOf("x-api-key" to cleanApiKey, "anthropic-version" to "2023-06-01", "Content-Type" to "application/json")
 
         try {
             val response = RetrofitClient.genericService.postChatCompletions(endpointUrl, headers, requestBody)
@@ -239,12 +251,24 @@ suspend fun generateContentStream(
                         } catch (ex: Exception) { "HTTP ${e.code()}" }
                     } else "HTTP ${e.code()}"
                 } catch (ex: Exception) { "HTTP ${e.code()}" }
-            } else e.message
+            } else if (e is java.net.SocketTimeoutException) {
+                "Connection timed out. The server might be experiencing high demand."
+            } else if (e is java.net.UnknownHostException) {
+                "Network error: Unable to resolve host."
+            } else {
+                e.message ?: "Unknown error"
+            }
             onChunkReceived("Error: $errorMsg\n", null)
         }
     } else {
         // OpenAI format fallback for other providers
         val messagesArray = kotlinx.serialization.json.buildJsonArray {
+            if (systemInstruction.isNotBlank()) {
+                add(kotlinx.serialization.json.buildJsonObject {
+                    put("role", kotlinx.serialization.json.JsonPrimitive("system"))
+                    put("content", kotlinx.serialization.json.JsonPrimitive(systemInstruction))
+                })
+            }
             history.forEach { msg ->
                 add(kotlinx.serialization.json.buildJsonObject {
                     put("role", kotlinx.serialization.json.JsonPrimitive(if (msg.role == com.sednium.localspaces.model.Role.USER) "user" else "assistant"))
@@ -263,7 +287,11 @@ suspend fun generateContentStream(
         }
         val requestBody = okhttp3.RequestBody.create("application/json".toMediaType(), requestJson.toString())
         val endpointUrl = if (baseUrl.endsWith("/")) "${baseUrl}chat/completions" else "$baseUrl/chat/completions"
-        val headers = mapOf("Authorization" to "Bearer $apiKey", "Content-Type" to "application/json")
+        val headers = mutableMapOf("Authorization" to "Bearer $cleanApiKey", "Content-Type" to "application/json")
+        if (provider == com.sednium.localspaces.model.ModelProvider.OPENROUTER) {
+            headers["HTTP-Referer"] = "https://github.com/sednium/localspaces"
+            headers["X-Title"] = "LocalSpaces AI"
+        }
 
         try {
             val response = RetrofitClient.genericService.postChatCompletions(endpointUrl, headers, requestBody)
@@ -299,7 +327,13 @@ suspend fun generateContentStream(
                         } catch (ex: Exception) { "HTTP ${e.code()}" }
                     } else "HTTP ${e.code()}"
                 } catch (ex: Exception) { "HTTP ${e.code()}" }
-            } else e.message
+            } else if (e is java.net.SocketTimeoutException) {
+                "Connection timed out. The server might be experiencing high demand."
+            } else if (e is java.net.UnknownHostException) {
+                "Network error: Unable to resolve host."
+            } else {
+                e.message ?: "Unknown error"
+            }
             onChunkReceived("Error: $errorMsg\n", null)
         }
     }
@@ -316,14 +350,15 @@ suspend fun testApiKey(apiKey: String, provider: com.sednium.localspaces.model.M
 }
 
 suspend fun fetchDynamicModels(apiKey: String, provider: com.sednium.localspaces.model.ModelProvider, localBaseUrl: String): List<com.sednium.localspaces.model.ModelOption> = withContext(Dispatchers.IO) {
-    if (apiKey.isBlank() && provider != com.sednium.localspaces.model.ModelProvider.LOCAL && provider != com.sednium.localspaces.model.ModelProvider.CUSTOM) return@withContext emptyList()
+    val cleanApiKey = apiKey.trim()
+    if (cleanApiKey.isBlank() && provider != com.sednium.localspaces.model.ModelProvider.LOCAL && provider != com.sednium.localspaces.model.ModelProvider.CUSTOM) return@withContext emptyList()
     
     val baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[provider]?.defaultUrl ?: ""
     val normalizedBaseUrl = if (provider == com.sednium.localspaces.model.ModelProvider.LOCAL || provider == com.sednium.localspaces.model.ModelProvider.CUSTOM) localBaseUrl else baseUrl
 
     try {
         if (provider == com.sednium.localspaces.model.ModelProvider.GOOGLE) {
-            val response = RetrofitClient.service.listModels(apiKey).string()
+            val response = RetrofitClient.service.listModels(cleanApiKey).string()
             val json = Json { ignoreUnknownKeys = true }
             val root = json.parseToJsonElement(response).jsonObject
             val models = root["models"]?.jsonArray
@@ -345,9 +380,11 @@ suspend fun fetchDynamicModels(apiKey: String, provider: com.sednium.localspaces
         // Generic OpenAI-compatible list models (Anthropic also using similar list models)
         val url = if (normalizedBaseUrl.endsWith("/")) "${normalizedBaseUrl}models" else "$normalizedBaseUrl/models"
         val headers = if (provider == com.sednium.localspaces.model.ModelProvider.ANTHROPIC) {
-            mapOf("x-api-key" to apiKey, "anthropic-version" to "2023-06-01")
+            mapOf("x-api-key" to cleanApiKey, "anthropic-version" to "2023-06-01")
+        } else if (provider == com.sednium.localspaces.model.ModelProvider.OPENROUTER) {
+            mapOf("Authorization" to "Bearer $cleanApiKey", "HTTP-Referer" to "https://github.com/sednium/localspaces", "X-Title" to "LocalSpaces AI")
         } else {
-            mapOf("Authorization" to "Bearer $apiKey")
+            mapOf("Authorization" to "Bearer $cleanApiKey")
         }
         val response = RetrofitClient.genericService.getModels(url, headers).string()
         val json = Json { ignoreUnknownKeys = true }

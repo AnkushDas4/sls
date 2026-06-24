@@ -66,6 +66,7 @@ fun SedniumApp(
     onTogglePin: (String) -> Unit,
     onClearCurrentChat: () -> Unit,
     onSend: (String, List<Attachment>) -> Unit,
+    onRetry: () -> Unit,
     isLoading: Boolean
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -192,6 +193,7 @@ fun SedniumApp(
                         attachments = emptyList()
                     }
                 },
+                onRetry = onRetry,
                 onAttachClick = { pickerLauncher.launch("*/*") },
                 onRemoveAttachment = { idx -> attachments = attachments.toMutableList().also { it.removeAt(idx) } },
                 onTogglePresetMenu = { isPresetMenuOpen = !isPresetMenuOpen },

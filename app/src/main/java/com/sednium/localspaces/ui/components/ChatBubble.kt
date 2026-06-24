@@ -18,8 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -61,14 +65,12 @@ fun ChatBubble(
     providerName: String,
     isDark: Boolean,
     isGenerating: Boolean,
-    onImageClick: (String) -> Unit
+    onImageClick: (String) -> Unit,
+    onRetry: (() -> Unit)? = null
 ) {
     val isModel = msg.role == Role.MODEL
-    var userThoughtExpanded by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(msg.isThinking) {
-        if (!msg.isThinking) userThoughtExpanded = false
-    }
-    val thoughtExpanded = userThoughtExpanded ?: msg.isThinking
+    var userThoughtExpanded by remember { mutableStateOf(false) }
+    val thoughtExpanded = userThoughtExpanded
 
     Row(
         modifier = Modifier
@@ -156,6 +158,12 @@ fun ChatBubble(
                 // --- Thought / reasoning trace (collapsible <details>) ---
                 if (msg.thought != null) {
                     val showThinking = msg.isThinking
+                    val thinkingStateText = when {
+                        msg.isThinking -> "Thinking…"
+                        isGenerating -> "Generating final output…"
+                        else -> "Thought Process"
+                    }
+                    
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -165,15 +173,20 @@ fun ChatBubble(
                             .clickable { userThoughtExpanded = !thoughtExpanded }
                             .padding(4.dp)
                     ) {
-                        if (showThinking) {
-                            ThinkingDots(dotColor = SedniumColors.Gray400)
-                        }
-                        Text(
-                            if (showThinking) "Thinking…" else "Internal Thought Process",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SedniumColors.Gray400,
-                            modifier = Modifier.padding(start = if (showThinking) 0.dp else 0.dp)
+                        Icon(
+                            imageVector = if (thoughtExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = SedniumColors.Orange.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp)
                         )
+                        Text(
+                            text = thinkingStateText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SedniumColors.Orange.copy(alpha = 0.5f)
+                        )
+                        if (msg.isThinking || isGenerating) {
+                            ThinkingDots(dotColor = SedniumColors.Orange.copy(alpha = 0.5f))
+                        }
                     }
                     AnimatedVisibility(
                         visible = thoughtExpanded,
@@ -223,26 +236,69 @@ fun ChatBubble(
                 }
 
                 // --- Generating placeholder when there's no content/thought yet ---
-                if (msg.content.isBlank() && msg.thought == null && isGenerating && !msg.isThinking && msg.toolCalls.isEmpty()) {
+                if (msg.content.isBlank() && msg.thought == null && isGenerating && msg.toolCalls.isEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
                         ThinkingDots(dotColor = SedniumColors.Orange.copy(alpha = 0.5f))
-                        Text("Generating…", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange.copy(alpha = 0.5f))
+                        Text(if (msg.isThinking) "Thinking…" else "Generating…", style = MaterialTheme.typography.labelSmall, color = SedniumColors.Orange.copy(alpha = 0.5f))
                     }
                 }
 
                 // --- Main content ---
                 if (msg.content.isNotBlank()) {
-                    com.sednium.localspaces.markdown.MarkdownView(
-                        content = msg.content,
-                        isDark = isDark,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                    )
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        com.sednium.localspaces.markdown.MarkdownView(
+                            content = msg.content,
+                            isDark = isDark,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                        )
+                    }
                 }
 
                 // --- Attachments row ---
                 if (msg.attachments.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         msg.attachments.forEach { att -> AttachmentPreview(att, isDark, onImageClick) }
+                    }
+                }
+
+                // --- Action Buttons ---
+                if (isModel && !isGenerating) {
+                    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        if (msg.content.isNotBlank()) {
+                            androidx.compose.material3.IconButton(
+                                onClick = {
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(msg.content))
+                                    android.widget.Toast.makeText(context, "Copied", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ContentCopy,
+                                    contentDescription = "Copy text",
+                                    tint = SedniumColors.Gray500,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        if (onRetry != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            androidx.compose.material3.IconButton(
+                                onClick = onRetry,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = "Retry",
+                                    tint = SedniumColors.Gray500,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -104,6 +104,77 @@ class MainActivity : FragmentActivity() {
                         onClearCurrentChat = {
                             chats = chats.map { if (it.id == currentChatId) it.copy(messages = emptyList()) else it }
                         },
+                        onRetry = {
+                            val chat = chats.find { it.id == currentChatId } ?: return@SedniumApp
+                            if (chat.messages.isEmpty()) return@SedniumApp
+                            
+                            // Remove the last model message(s) if any
+                            var newMessages = chat.messages
+                            while (newMessages.isNotEmpty() && newMessages.last().role == Role.MODEL) {
+                                newMessages = newMessages.dropLast(1)
+                            }
+                            
+                            val lastUserMsg = newMessages.lastOrNull { it.role == Role.USER }
+                            if (lastUserMsg == null) return@SedniumApp
+                            
+                            // Remove the last user msg from the history to be sent as the new prompt
+                            val historyWithoutLastUser = newMessages.dropLast(1)
+                            
+                            val modelMsgId = (System.currentTimeMillis() + 1).toString()
+                            val initialModelMsg = ChatMessage(
+                                id = modelMsgId,
+                                role = Role.MODEL,
+                                content = "",
+                                modelName = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.displayName ?: settings.model,
+                                isThinking = false
+                            )
+                            
+                            chats = chats.map {
+                                if (it.id == currentChatId) it.copy(
+                                    messages = newMessages + initialModelMsg,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                                else it
+                            }
+
+                            isLoading = true
+                            scope.launch {
+                                try {
+                                    val apiKey = com.sednium.localspaces.ui.screens.apiKeyFor(settings)
+                                    if (apiKey.isBlank()) throw Exception("API Key is missing.")
+                                    generateContentStream(
+                                        apiKey = apiKey,
+                                        modelName = settings.model,
+                                        prompt = lastUserMsg.content,
+                                        history = historyWithoutLastUser,
+                                        provider = settings.provider,
+                                        baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
+                                        systemInstruction = settings.systemInstruction,
+                                        onChunkReceived = { deltaText, _ ->
+                                            chats = chats.map { chat ->
+                                                if (chat.id == currentChatId) {
+                                                    val updatedMessages = chat.messages.map { msg ->
+                                                        if (msg.id == modelMsgId) msg.copy(content = msg.content + deltaText) else msg
+                                                    }
+                                                    chat.copy(messages = updatedMessages, updatedAt = System.currentTimeMillis())
+                                                } else chat
+                                            }
+                                        }
+                                    )
+                                } catch (e: Exception) {
+                                    chats = chats.map { chat ->
+                                        if (chat.id == currentChatId) {
+                                            val updatedMessages = chat.messages.map { msg ->
+                                                if (msg.id == modelMsgId) msg.copy(content = "Error: ${e.message}", isError = true) else msg
+                                            }
+                                            chat.copy(messages = updatedMessages)
+                                        } else chat
+                                    }
+                                } finally {
+                                    isLoading = false
+                                }
+                            }
+                        },
                         onSend = { text, attachments ->
                             val userMsg = ChatMessage(
                                 id = System.currentTimeMillis().toString(),
@@ -144,6 +215,7 @@ class MainActivity : FragmentActivity() {
                                         history = activeChatHistory,
                                         provider = settings.provider,
                                         baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
+                                        systemInstruction = settings.systemInstruction,
                                         onChunkReceived = { deltaText, _ ->
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {

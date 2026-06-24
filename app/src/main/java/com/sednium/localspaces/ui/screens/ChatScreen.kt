@@ -120,6 +120,7 @@ fun ChatScreen(
     isPresetMenuOpen: Boolean,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
+    onRetry: () -> Unit,
     onAttachClick: () -> Unit,
     onRemoveAttachment: (Int) -> Unit,
     onTogglePresetMenu: () -> Unit,
@@ -133,21 +134,55 @@ fun ChatScreen(
     val providerName = PROVIDER_CONFIG[settings.provider]?.displayName ?: "Unknown"
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var wasLoading by remember { mutableStateOf(isLoading) }
+    
+    // Haptic feedback when generation completes
+    LaunchedEffect(isLoading) {
+        if (wasLoading && !isLoading && messages.isNotEmpty() && messages.last().role == Role.MODEL) {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+        }
+        wasLoading = isLoading
+    }
     
     // Auto-scroll logic
     val lastMessage = messages.lastOrNull()
+    var isUserScrolling by remember { mutableStateOf(false) }
+    
+    // Detect manual scrolling to stop auto-scroll
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            isUserScrolling = true
+        }
+    }
+    
+    // Reset user scrolling state when we are at the bottom
+    LaunchedEffect(listState.canScrollForward) {
+        if (!listState.canScrollForward) {
+            isUserScrolling = false
+        }
+    }
+    
+    LaunchedEffect(messages.size) {
+        // Auto scroll for new messages
+        if (messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size - 1)
+        }
+    }
+
     LaunchedEffect(
-        messages.size, 
         lastMessage?.content?.length, 
         lastMessage?.thought?.length, 
         lastMessage?.toolCalls?.size
     ) {
-        if (messages.isNotEmpty()) {
+        if (messages.isNotEmpty() && !isUserScrolling) {
             val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = listState.layoutInfo.totalItemsCount
-            // Auto-scroll if we are close to the bottom (e.g. within 3 items) or if it's the very first load
-            if (totalItems - lastVisibleIndex <= 3) {
-                listState.animateScrollToItem(messages.size - 1)
+            
+            // Only auto-scroll if we are already near the bottom
+            if (totalItems - lastVisibleIndex <= 2) {
+                // Use scrollToItem instead of animateScrollToItem during generation to prevent animation interruption jitters
+                listState.scrollToItem(messages.size - 1)
             }
         }
     }
@@ -240,12 +275,14 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.Top
                 ) {
                     items(messages, key = { it.id }) { msg ->
+                        val isLast = msg.id == messages.last().id
                         ChatBubble(
                             msg = msg,
                             providerName = providerName,
                             isDark = false,
-                            isGenerating = isLoading && msg.id == messages.last().id,
-                            onImageClick = onImageClick
+                            isGenerating = isLoading && isLast,
+                            onImageClick = onImageClick,
+                            onRetry = if (isLast && msg.role == Role.MODEL && !isLoading) onRetry else null
                         )
                     }
                 }

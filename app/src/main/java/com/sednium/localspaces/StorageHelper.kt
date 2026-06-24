@@ -15,7 +15,7 @@ class StorageHelper(context: Context) {
 
     fun loadSettings(): AppSettings {
         val str = prefs.getString("settings_json", null)
-        return if (str != null) {
+        val loaded = if (str != null) {
             try {
                 json.decodeFromString<AppSettings>(str)
             } catch (e: Exception) {
@@ -23,6 +23,11 @@ class StorageHelper(context: Context) {
             }
         } else {
             AppSettings()
+        }
+        return if (loaded.systemInstruction.isBlank()) {
+            loaded.copy(systemInstruction = AppSettings().systemInstruction)
+        } else {
+            loaded
         }
     }
 

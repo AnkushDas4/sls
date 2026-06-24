@@ -73,8 +73,7 @@ fun MessageComposer(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(SedniumColors.SedYellow)
+            .background(SedniumColors.SedYellow, RoundedCornerShape(24.dp))
             .border(1.dp, SedRedAlpha.a30, RoundedCornerShape(24.dp))
             .padding(6.dp)
     ) {
@@ -129,27 +128,26 @@ fun MessageComposer(
                 }
             }
 
-            TextField(
+            androidx.compose.foundation.text.BasicTextField(
                 value = input,
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = 150.dp),
-                placeholder = { Text("Message…", color = SedniumColors.SedRed.copy(alpha = 0.5f)) },
+                    .heightIn(max = 150.dp)
+                    .padding(top = 12.dp, bottom = 12.dp), // Adjust padding to center it
                 enabled = !isLoading,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    focusedTextColor = SedniumColors.SedRed,
-                    unfocusedTextColor = SedniumColors.SedRed,
-                    disabledTextColor = SedniumColors.SedRed.copy(alpha = 0.5f),
-                    cursorColor = SedniumColors.SedRed
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (isLoading) SedniumColors.SedRed.copy(alpha = 0.5f) else SedniumColors.SedRed
                 ),
-                textStyle = MaterialTheme.typography.bodyLarge
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(SedniumColors.SedRed),
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (input.isEmpty()) {
+                            Text("Message…", color = SedniumColors.SedRed.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyLarge)
+                        }
+                        innerTextField()
+                    }
+                }
             )
 
             Box(

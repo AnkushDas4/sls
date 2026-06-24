@@ -3,9 +3,11 @@ package com.sednium.localspaces.code
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -14,11 +16,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -34,6 +40,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -55,10 +67,45 @@ fun CodeBlockView(
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var justCopied by remember { mutableStateOf(false) }
+    var showPreview by remember { mutableStateOf(false) }
 
+    val isPreviewable = language?.lowercase() in listOf("html", "svg", "xml")
     val highlighted = remember(code, language) { SyntaxHighlighter.highlight(code, language, isDark) }
     val lineCount = remember(code) { code.count { it == '\n' } + 1 }
     val lineNumberWidth = remember(lineCount) { (lineCount.toString().length * 9 + 12).dp }
+
+    if (showPreview) {
+        Dialog(
+            onDismissRequest = { showPreview = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AndroidView(
+                        factory = { context ->
+                            WebView(context).apply {
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                webChromeClient = WebChromeClient()
+                                webViewClient = WebViewClient()
+                                loadDataWithBaseURL(null, code, "text/html", "utf-8", null)
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    IconButton(
+                        onClick = { showPreview = false },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(16.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+                    ) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close Preview", tint = Color.White)
+                    }
+                }
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -69,7 +116,8 @@ fun CodeBlockView(
         // --- header: language pill + copy button ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = (language?.takeIf { it.isNotBlank() } ?: "text").uppercase(),
@@ -77,20 +125,35 @@ fun CodeBlockView(
                 color = Color(0xFF8B949E),
                 fontFamily = FontFamily.Monospace
             )
-            IconButton(
-                onClick = {
-                    clipboard.setText(AnnotatedString(code))
-                    justCopied = true
-                    scope.launch { delay(1500); justCopied = false }
-                },
-                modifier = Modifier.width(28.dp)
-            ) {
-                Icon(
-                    if (justCopied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                    contentDescription = if (justCopied) "Copied" else "Copy code",
-                    tint = if (justCopied) Color(0xFF3FB950) else Color(0xFF8B949E),
-                    modifier = Modifier.padding(2.dp)
-                )
+            Row {
+                if (isPreviewable) {
+                    IconButton(
+                        onClick = { showPreview = true },
+                        modifier = Modifier.width(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = "Preview HTML",
+                            tint = Color(0xFF58A6FF),
+                            modifier = Modifier.padding(2.dp)
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(code))
+                        justCopied = true
+                        scope.launch { delay(1500); justCopied = false }
+                    },
+                    modifier = Modifier.width(32.dp)
+                ) {
+                    Icon(
+                        if (justCopied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                        contentDescription = if (justCopied) "Copied" else "Copy code",
+                        tint = if (justCopied) Color(0xFF3FB950) else Color(0xFF8B949E),
+                        modifier = Modifier.padding(2.dp)
+                    )
+                }
             }
         }
 
