@@ -136,6 +136,24 @@ enum class ModelIconType {
 
 data class ModelOption(val id: String, val label: String, val icon: ModelIconType = ModelIconType.TEXT)
 
+// `ModelIconType.IMAGE` above is a UI category (speed/tier/specialty), not a
+// reliable capability flag — most flagship models across every provider
+// here (Gemini, GPT, Claude, Grok, etc.) actually DO support image input
+// despite being tagged LIGHTNING/AGENT/CODE for speed instead. Rather than
+// try to maintain an allowlist of "known vision models" that goes stale the
+// moment a provider ships a new one, this defaults to assuming vision
+// support and only flags the handful of model families that are clearly
+// NOT multimodal (audio transcription, embeddings, moderation, TTS). It's
+// used purely to show a soft warning before sending, never to block the
+// attach button or the send action — we genuinely can't be certain, and
+// the provider's own error response is still the ground truth.
+private val KNOWN_NON_VISION_PATTERNS = listOf("whisper", "embed", "moderation", "-tts", "rerank")
+
+fun isLikelyVisionCapable(modelId: String): Boolean {
+    val lower = modelId.lowercase()
+    return KNOWN_NON_VISION_PATTERNS.none { lower.contains(it) }
+}
+
 data class ProviderInfo(val displayName: String, val defaultUrl: String, val apiLink: String = "", val popularModels: List<ModelOption> = emptyList())
 
 /** Mirrors PROVIDER_CONFIG from constants.ts */

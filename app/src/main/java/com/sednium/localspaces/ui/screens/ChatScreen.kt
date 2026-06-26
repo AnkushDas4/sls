@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -58,6 +59,7 @@ import com.sednium.localspaces.ui.components.ChatBubble
 import com.sednium.localspaces.ui.components.MessageComposer
 import com.sednium.localspaces.ui.components.SedniumTopBar
 import com.sednium.localspaces.ui.theme.OrangeAlpha
+import com.sednium.localspaces.ui.theme.SedRedAlpha
 import com.sednium.localspaces.ui.theme.SedniumColors
 import com.sednium.localspaces.ui.theme.SedniumRadii
 
@@ -66,6 +68,7 @@ import androidx.compose.foundation.layout.imePadding
 import kotlinx.coroutines.launch
 
 import com.sednium.localspaces.navigation.LocalServerStatus
+import com.sednium.localspaces.voice.rememberVoiceInputController
 
 @Composable
 fun ToolActivityView(toolCalls: List<ToolCallState>, modifier: Modifier = Modifier) {
@@ -136,8 +139,32 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var wasLoading by remember { mutableStateOf(isLoading) }
+
+    // Partial results are kept separate from `input` and shown as a dimmed
+    // live preview instead of being written into the actual text field —
+    // partial guesses get revised mid-sentence by SpeechRecognizer, and
+    // committing each revision straight into `input` would make the field
+    // visibly jump around while the user is still talking.
+    var partialTranscript by remember { mutableStateOf("") }
+
+    val voiceController = rememberVoiceInputController(
+        onPartialResult = { partial -> partialTranscript = partial },
+        onFinalResult = { transcript ->
+            onInputChange(if (input.isBlank()) transcript else "$input $transcript")
+            partialTranscript = ""
+        },
+        onError = { message ->
+            partialTranscript = ""
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    )
     
+    LaunchedEffect(voiceController.isListening) {
+        if (!voiceController.isListening) partialTranscript = ""
+    }
+
     // Haptic feedback when generation completes
     LaunchedEffect(isLoading) {
         if (wasLoading && !isLoading && messages.isNotEmpty() && messages.last().role == Role.MODEL) {
@@ -247,6 +274,68 @@ fun ChatScreen(
                     .imePadding()
                     .padding(12.dp)
             ) {
+                val hasImageAttachment = attachments.any { it.type == com.sednium.localspaces.model.AttachmentType.IMAGE }
+
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = voiceController.isListening && partialTranscript.isNotBlank(),
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut() + slideOutVertically()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(SedniumRadii.sm))
+                            .background(SedRedAlpha.a10)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Mic,
+                            contentDescription = null,
+                            tint = SedniumColors.SedRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            partialTranscript,
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                            color = SedniumColors.SedRed.copy(alpha = 0.6f),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = hasImageAttachment && !com.sednium.localspaces.model.isLikelyVisionCapable(settings.model),
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut() + slideOutVertically()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(SedniumRadii.sm))
+                            .background(OrangeAlpha.a10)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.ErrorOutline,
+                            contentDescription = null,
+                            tint = SedniumColors.Orange,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            "\"${settings.model}\" may not support images — it might ignore the attachment or return an error.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SedniumColors.Orange,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
                 MessageComposer(
                     input = input,
                     onInputChange = onInputChange,
@@ -259,6 +348,8 @@ fun ChatScreen(
                     activePresetId = settings.activePresetId,
                     onSelectPreset = onSelectPreset,
                     onAttachClick = onAttachClick,
+                    isListening = voiceController.isListening,
+                    onVoiceClick = { voiceController.toggle() },
                     onSend = onSend
                 )
                 Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp, end = 8.dp), contentAlignment = Alignment.Center) {

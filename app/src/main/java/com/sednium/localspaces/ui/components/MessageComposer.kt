@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Icon
@@ -66,6 +68,8 @@ fun MessageComposer(
     activePresetId: String?,
     onSelectPreset: (SavedModelPreset) -> Unit,
     onAttachClick: () -> Unit,
+    isListening: Boolean = false,
+    onVoiceClick: () -> Unit = {},
     onSend: () -> Unit
 ) {
     val canSend = (input.isNotBlank() || attachments.isNotEmpty()) && !isLoading
@@ -128,6 +132,14 @@ fun MessageComposer(
                 }
             }
 
+            IconButton(onClick = onVoiceClick, enabled = !isLoading) {
+                Icon(
+                    if (isListening) Icons.Filled.Mic else Icons.Filled.MicOff,
+                    contentDescription = if (isListening) "Stop dictation" else "Voice input",
+                    tint = if (isListening) SedniumColors.SedRed else SedniumColors.SedRed.copy(alpha = 0.7f)
+                )
+            }
+
             androidx.compose.foundation.text.BasicTextField(
                 value = input,
                 onValueChange = onInputChange,
@@ -143,7 +155,11 @@ fun MessageComposer(
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (input.isEmpty()) {
-                            Text("Message…", color = SedniumColors.SedRed.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (isListening) "Listening…" else "Message…",
+                                color = SedniumColors.SedRed.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
                         innerTextField()
                     }

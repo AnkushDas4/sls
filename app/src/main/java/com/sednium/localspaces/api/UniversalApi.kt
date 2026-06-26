@@ -130,6 +130,91 @@ object RetrofitClient {
     }
 }
 
+// --- Multimodal content builders ---
+// Each provider wants attachments shaped differently. These take the same
+// (text, attachments) pair and produce whatever that provider's wire format
+// needs. Used for both history messages and the current turn, so an image
+// stays attached to its turn across a multi-turn vision conversation
+// instead of silently dropping after the first reply.
+
+private fun buildGeminiParts(text: String, attachments: List<com.sednium.localspaces.model.Attachment>): List<Part> {
+    val parts = mutableListOf<Part>()
+    val textAttachments = attachments.filter { it.type == com.sednium.localspaces.model.AttachmentType.TEXT }
+    val imageAttachments = attachments.filter { it.type == com.sednium.localspaces.model.AttachmentType.IMAGE }
+
+    val combinedText = buildString {
+        textAttachments.forEach { att -> append("[Attached file: ${att.name}]\n${att.data}\n\n") }
+        append(text)
+    }
+    if (combinedText.isNotEmpty()) parts.add(Part(text = combinedText))
+    imageAttachments.forEach { att -> parts.add(Part(inlineData = InlineData(mimeType = att.mimeType, data = att.data))) }
+    if (parts.isEmpty()) parts.add(Part(text = ""))
+    return parts
+}
+
+private fun buildAnthropicContentBlocks(
+    text: String,
+    attachments: List<com.sednium.localspaces.model.Attachment>
+): kotlinx.serialization.json.JsonElement {
+    val textAttachments = attachments.filter { it.type == com.sednium.localspaces.model.AttachmentType.TEXT }
+    val imageAttachments = attachments.filter { it.type == com.sednium.localspaces.model.AttachmentType.IMAGE }
+    if (imageAttachments.isEmpty() && textAttachments.isEmpty()) {
+        // Plain string content is valid (and simplest) when there's nothing to attach.
+        return kotlinx.serialization.json.JsonPrimitive(text)
+    }
+    return kotlinx.serialization.json.buildJsonArray {
+        imageAttachments.forEach { att ->
+            add(kotlinx.serialization.json.buildJsonObject {
+                put("type", kotlinx.serialization.json.JsonPrimitive("image"))
+                put("source", kotlinx.serialization.json.buildJsonObject {
+                    put("type", kotlinx.serialization.json.JsonPrimitive("base64"))
+                    put("media_type", kotlinx.serialization.json.JsonPrimitive(att.mimeType))
+                    put("data", kotlinx.serialization.json.JsonPrimitive(att.data))
+                })
+            })
+        }
+        val combinedText = buildString {
+            textAttachments.forEach { att -> append("[Attached file: ${att.name}]\n${att.data}\n\n") }
+            append(text)
+        }
+        add(kotlinx.serialization.json.buildJsonObject {
+            put("type", kotlinx.serialization.json.JsonPrimitive("text"))
+            put("text", kotlinx.serialization.json.JsonPrimitive(combinedText))
+        })
+    }
+}
+
+private fun buildOpenAiContent(
+    text: String,
+    attachments: List<com.sednium.localspaces.model.Attachment>
+): kotlinx.serialization.json.JsonElement {
+    val textAttachments = attachments.filter { it.type == com.sednium.localspaces.model.AttachmentType.TEXT }
+    val imageAttachments = attachments.filter { it.type == com.sednium.localspaces.model.AttachmentType.IMAGE }
+    if (imageAttachments.isEmpty() && textAttachments.isEmpty()) {
+        // Keep plain string content when there's nothing attached — safest
+        // for OpenAI-compatible providers that are strict about the schema.
+        return kotlinx.serialization.json.JsonPrimitive(text)
+    }
+    return kotlinx.serialization.json.buildJsonArray {
+        val combinedText = buildString {
+            textAttachments.forEach { att -> append("[Attached file: ${att.name}]\n${att.data}\n\n") }
+            append(text)
+        }
+        add(kotlinx.serialization.json.buildJsonObject {
+            put("type", kotlinx.serialization.json.JsonPrimitive("text"))
+            put("text", kotlinx.serialization.json.JsonPrimitive(combinedText))
+        })
+        imageAttachments.forEach { att ->
+            add(kotlinx.serialization.json.buildJsonObject {
+                put("type", kotlinx.serialization.json.JsonPrimitive("image_url"))
+                put("image_url", kotlinx.serialization.json.buildJsonObject {
+                    put("url", kotlinx.serialization.json.JsonPrimitive("data:${att.mimeType};base64,${att.data}"))
+                })
+            })
+        }
+    }
+}
+
 suspend fun generateContentStream(
     apiKey: String,
     modelName: String,
@@ -147,6 +232,13 @@ suspend fun generateContentStream(
     topP: Float = 0.9f,
     topK: Int = 40,
     maxTokens: Int = 4096,
+    // Attachments for the CURRENT turn (the `prompt` text). History messages
+    // carry their own attachments on ChatMessage.attachments already — see
+    // buildGeminiParts/buildAnthropicContentBlocks/buildOpenAiContent below,
+    // which read msg.attachments for every history message too, so a vision
+    // conversation stays multi-turn instead of losing the image after the
+    // first reply.
+    attachments: List<com.sednium.localspaces.model.Attachment> = emptyList(),
     onChunkReceived: (String, String?) -> Unit // (deltaText, deltaThought)
 ) = withContext(Dispatchers.IO) {
     val cleanApiKey = apiKey.trim()
@@ -154,9 +246,9 @@ suspend fun generateContentStream(
         val contents = history.map { msg ->
             Content(
                 role = if (msg.role == com.sednium.localspaces.model.Role.USER) "user" else "model",
-                parts = listOf(Part(text = msg.content))
+                parts = buildGeminiParts(msg.content, msg.attachments)
             )
-        } + Content("user", listOf(Part(text = prompt)))
+        } + Content("user", buildGeminiParts(prompt, attachments))
 
         val sysContent = if (systemInstruction.isNotBlank()) Content("user", listOf(Part(text = systemInstruction))) else null
         val request = GenerateContentRequest(
@@ -214,12 +306,12 @@ suspend fun generateContentStream(
             history.forEach { msg ->
                 add(kotlinx.serialization.json.buildJsonObject {
                     put("role", kotlinx.serialization.json.JsonPrimitive(if (msg.role == com.sednium.localspaces.model.Role.USER) "user" else "assistant"))
-                    put("content", kotlinx.serialization.json.JsonPrimitive(msg.content))
+                    put("content", buildAnthropicContentBlocks(msg.content, msg.attachments))
                 })
             }
             add(kotlinx.serialization.json.buildJsonObject {
                 put("role", kotlinx.serialization.json.JsonPrimitive("user"))
-                put("content", kotlinx.serialization.json.JsonPrimitive(prompt))
+                put("content", buildAnthropicContentBlocks(prompt, attachments))
             })
         }
         val requestJson = kotlinx.serialization.json.buildJsonObject {
@@ -294,12 +386,12 @@ suspend fun generateContentStream(
             history.forEach { msg ->
                 add(kotlinx.serialization.json.buildJsonObject {
                     put("role", kotlinx.serialization.json.JsonPrimitive(if (msg.role == com.sednium.localspaces.model.Role.USER) "user" else "assistant"))
-                    put("content", kotlinx.serialization.json.JsonPrimitive(msg.content))
+                    put("content", buildOpenAiContent(msg.content, msg.attachments))
                 })
             }
             add(kotlinx.serialization.json.buildJsonObject {
                 put("role", kotlinx.serialization.json.JsonPrimitive("user"))
-                put("content", kotlinx.serialization.json.JsonPrimitive(prompt))
+                put("content", buildOpenAiContent(prompt, attachments))
             })
         }
         val requestJson = kotlinx.serialization.json.buildJsonObject {

@@ -234,6 +234,7 @@ class MainActivity : FragmentActivity() {
                                         topP = chat.topPOverride ?: settings.topP,
                                         topK = chat.topKOverride ?: settings.topK,
                                         maxTokens = chat.maxTokensOverride ?: settings.maxTokens,
+                                        attachments = lastUserMsg.attachments,
                                         onChunkReceived = { deltaText, _ ->
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {
@@ -305,6 +306,7 @@ class MainActivity : FragmentActivity() {
                                         topP = currentChatSession?.topPOverride ?: settings.topP,
                                         topK = currentChatSession?.topKOverride ?: settings.topK,
                                         maxTokens = currentChatSession?.maxTokensOverride ?: settings.maxTokens,
+                                        attachments = attachments,
                                         onChunkReceived = { deltaText, _ ->
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {
