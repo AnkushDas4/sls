@@ -52,6 +52,7 @@ data class GenerationConfig(
     val temperature: Float? = null,
     val topP: Float? = null,
     val topK: Int? = null,
+    val maxOutputTokens: Int? = null,
     val thinkingConfig: ThinkingConfig? = null
 )
 
@@ -137,6 +138,15 @@ suspend fun generateContentStream(
     provider: com.sednium.localspaces.model.ModelProvider = com.sednium.localspaces.model.ModelProvider.GOOGLE,
     baseUrl: String = "",
     systemInstruction: String = "",
+    // These previously existed on AppSettings but were never actually wired
+    // into any of the three request branches below — the sliders in
+    // Settings did nothing. Defaults mirror AppSettings' own defaults so
+    // existing call sites that don't pass them keep prior (if accidental)
+    // behavior.
+    temperature: Float = 0.7f,
+    topP: Float = 0.9f,
+    topK: Int = 40,
+    maxTokens: Int = 4096,
     onChunkReceived: (String, String?) -> Unit // (deltaText, deltaThought)
 ) = withContext(Dispatchers.IO) {
     val cleanApiKey = apiKey.trim()
@@ -149,7 +159,16 @@ suspend fun generateContentStream(
         } + Content("user", listOf(Part(text = prompt)))
 
         val sysContent = if (systemInstruction.isNotBlank()) Content("user", listOf(Part(text = systemInstruction))) else null
-        val request = GenerateContentRequest(systemInstruction = sysContent, contents = contents)
+        val request = GenerateContentRequest(
+            systemInstruction = sysContent,
+            contents = contents,
+            generationConfig = GenerationConfig(
+                temperature = temperature,
+                topP = topP,
+                topK = topK,
+                maxOutputTokens = maxTokens
+            )
+        )
         try {
             val response = RetrofitClient.service.generateContentStream(modelName, cleanApiKey, request)
             response.byteStream().bufferedReader().use { reader ->
@@ -206,7 +225,10 @@ suspend fun generateContentStream(
         val requestJson = kotlinx.serialization.json.buildJsonObject {
             put("model", kotlinx.serialization.json.JsonPrimitive(modelName))
             put("stream", kotlinx.serialization.json.JsonPrimitive(true))
-            put("max_tokens", kotlinx.serialization.json.JsonPrimitive(4096))
+            put("max_tokens", kotlinx.serialization.json.JsonPrimitive(maxTokens))
+            put("temperature", kotlinx.serialization.json.JsonPrimitive(temperature))
+            put("top_p", kotlinx.serialization.json.JsonPrimitive(topP))
+            put("top_k", kotlinx.serialization.json.JsonPrimitive(topK))
             put("messages", messagesArray)
             if (systemInstruction.isNotBlank()) {
                 put("system", kotlinx.serialization.json.JsonPrimitive(systemInstruction))
@@ -283,6 +305,9 @@ suspend fun generateContentStream(
         val requestJson = kotlinx.serialization.json.buildJsonObject {
             put("model", kotlinx.serialization.json.JsonPrimitive(modelName))
             put("stream", kotlinx.serialization.json.JsonPrimitive(true))
+            put("temperature", kotlinx.serialization.json.JsonPrimitive(temperature))
+            put("top_p", kotlinx.serialization.json.JsonPrimitive(topP))
+            put("max_tokens", kotlinx.serialization.json.JsonPrimitive(maxTokens))
             put("messages", messagesArray)
         }
         val requestBody = okhttp3.RequestBody.create("application/json".toMediaType(), requestJson.toString())

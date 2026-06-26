@@ -129,6 +129,7 @@ fun ChatScreen(
     onExportClick: () -> Unit,
     onClearClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onSessionConfigClick: () -> Unit = {},
     onImageClick: (String) -> Unit
 ) {
     val providerName = PROVIDER_CONFIG[settings.provider]?.displayName ?: "Unknown"
@@ -164,9 +165,22 @@ fun ChatScreen(
     }
     
     LaunchedEffect(messages.size) {
-        // Auto scroll for new messages
+        // Two different intents share this trigger:
+        //  - The user just sent a message: pin THEIR new message to the top
+        //    of the viewport so the rest of the screen is free for the
+        //    incoming response, instead of leaving the new turn buried at
+        //    the bottom edge (matches the Gemini-app / Gallery pattern).
+        //  - Anything else that changes message count (new chat opened,
+        //    a model turn placeholder appended, etc.): only snap to bottom
+        //    if the user isn't already mid-scroll reading something else.
         if (messages.isNotEmpty()) {
-            listState.scrollToItem(messages.size - 1)
+            val last = messages.last()
+            if (last.role == Role.USER) {
+                isUserScrolling = false
+                listState.animateScrollToItem(messages.size - 1, scrollOffset = 0)
+            } else if (!isUserScrolling) {
+                listState.scrollToItem(messages.size - 1)
+            }
         }
     }
 
@@ -220,6 +234,7 @@ fun ChatScreen(
                 onExportClick = onExportClick,
                 onClearClick = onClearClick,
                 onSettingsClick = onSettingsClick,
+                onSessionConfigClick = onSessionConfigClick,
                 onFocusModeToggle = { isFocusMode = !isFocusMode }
             )
         },

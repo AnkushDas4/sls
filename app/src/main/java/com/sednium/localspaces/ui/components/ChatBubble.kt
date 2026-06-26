@@ -246,9 +246,10 @@ fun ChatBubble(
                 // --- Main content ---
                 if (msg.content.isNotBlank()) {
                     androidx.compose.foundation.text.selection.SelectionContainer {
-                        com.sednium.localspaces.markdown.MarkdownView(
+                        BufferedFadingMarkdown(
                             content = msg.content,
                             isDark = isDark,
+                            isStreaming = isModel && isGenerating,
                             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                         )
                     }

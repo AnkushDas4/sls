@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +82,7 @@ fun McpServersScreen(
     onPresetClick: (String, String) -> Unit,
     onRemove: (String) -> Unit,
     onReconnectAll: () -> Unit,
+    onToggleTool: (serverId: String, toolName: String, enabled: Boolean) -> Unit,
     onClose: () -> Unit
 ) {
     val statuses by mcpServerManager.statuses.collectAsState()
@@ -140,8 +146,9 @@ fun McpServersScreen(
                         config = config,
                         status = statusInfo?.status ?: McpConnectionStatus.ERROR,
                         error = statusInfo?.error,
-                        toolCount = statusInfo?.tools?.size ?: 0,
-                        onRemove = { onRemove(config.id) }
+                        tools = statusInfo?.tools ?: emptyList(),
+                        onRemove = { onRemove(config.id) },
+                        onToggleTool = { toolName, enabled -> onToggleTool(config.id, toolName, enabled) }
                     )
                 }
             }
@@ -183,66 +190,138 @@ fun McpServerCard(
     config: MCPConfig,
     status: McpConnectionStatus,
     error: String?,
-    toolCount: Int,
-    onRemove: () -> Unit
+    tools: List<com.sednium.localspaces.mcp.Tool>,
+    onRemove: () -> Unit,
+    onToggleTool: (toolName: String, enabled: Boolean) -> Unit
 ) {
-    Row(
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val toolCount = tools.size
+    val activeCount = tools.count { it.name !in config.disabledTools }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(OrangeAlpha.a05)
             .border(1.dp, OrangeAlpha.a20, RoundedCornerShape(12.dp))
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(16.dp)
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(config.name, fontWeight = FontWeight.Bold, color = SedniumColors.Orange, style = MaterialTheme.typography.titleMedium)
-                when (status) {
-                    McpConnectionStatus.CONNECTING -> {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.5.dp, color = SedniumColors.Orange)
-                        Text("Connecting", color = OrangeAlpha.a60, style = MaterialTheme.typography.labelSmall)
-                    }
-                    McpConnectionStatus.CONNECTED -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(SedniumColors.Orange.copy(alpha = 0.1f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("Connected", color = SedniumColors.Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(config.name, fontWeight = FontWeight.Bold, color = SedniumColors.Orange, style = MaterialTheme.typography.titleMedium)
+                    when (status) {
+                        McpConnectionStatus.CONNECTING -> {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.5.dp, color = SedniumColors.Orange)
+                            Text("Connecting", color = OrangeAlpha.a60, style = MaterialTheme.typography.labelSmall)
                         }
-                    }
-                    McpConnectionStatus.ERROR -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(com.sednium.localspaces.ui.theme.SedniumColors.Orange.copy(alpha = 0.1f)) // A bit redundant since everything is orange scaled
-                                .border(1.dp, SedniumColors.Orange, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("Error", color = SedniumColors.Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        McpConnectionStatus.CONNECTED -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(SedniumColors.Orange.copy(alpha = 0.1f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("Connected", color = SedniumColors.Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        McpConnectionStatus.ERROR -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(com.sednium.localspaces.ui.theme.SedniumColors.Orange.copy(alpha = 0.1f)) // A bit redundant since everything is orange scaled
+                                    .border(1.dp, SedniumColors.Orange, RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text("Error", color = SedniumColors.Orange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(config.url, color = OrangeAlpha.a60, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+                if (status == McpConnectionStatus.CONNECTED) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "$activeCount of $toolCount tool${if (toolCount == 1) "" else "s"} active",
+                        color = OrangeAlpha.a60,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                } else if (status == McpConnectionStatus.ERROR && error != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(error, color = SedniumColors.Orange, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(config.url, color = OrangeAlpha.a60, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            
-            if (status == McpConnectionStatus.CONNECTED) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("$toolCount tool${if (toolCount == 1) "" else "s"} available", color = OrangeAlpha.a60, style = MaterialTheme.typography.labelSmall)
-            } else if (status == McpConnectionStatus.ERROR && error != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(error, color = SedniumColors.Orange, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (status == McpConnectionStatus.CONNECTED && toolCount > 0) {
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = if (expanded) "Hide tools" else "Show tools",
+                            tint = OrangeAlpha.a60
+                        )
+                    }
+                }
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Remove Server", tint = OrangeAlpha.a60)
+                }
             }
         }
-        
-        IconButton(onClick = onRemove) {
-            Icon(Icons.Filled.Delete, contentDescription = "Remove Server", tint = OrangeAlpha.a60)
+
+        if (expanded && status == McpConnectionStatus.CONNECTED) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(OrangeAlpha.a05)
+                    .padding(horizontal = 8.dp)
+            ) {
+                tools.forEach { tool ->
+                    val enabled = tool.name !in config.disabledTools
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text(
+                                tool.name,
+                                color = if (enabled) SedniumColors.Orange else OrangeAlpha.a40,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            tool.description?.let {
+                                Text(
+                                    it,
+                                    color = if (enabled) OrangeAlpha.a60 else OrangeAlpha.a40,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = enabled,
+                            onCheckedChange = { onToggleTool(tool.name, it) },
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = SedniumColors.Orange,
+                                checkedTrackColor = SedniumColors.Orange.copy(alpha = 0.4f)
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 }

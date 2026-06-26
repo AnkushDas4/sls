@@ -58,6 +58,7 @@ fun SedniumApp(
     settings: AppSettings,
     mcpServerManager: com.sednium.localspaces.mcp.McpServerManager,
     onUpdateSettings: (AppSettings) -> Unit,
+    onUpdateSessionConfig: (ChatSession) -> Unit,
     onSelectChat: (String) -> Unit,
     onNewChat: () -> Unit,
     onDeleteChat: (String) -> Unit,
@@ -67,12 +68,14 @@ fun SedniumApp(
     onClearCurrentChat: () -> Unit,
     onSend: (String, List<Attachment>) -> Unit,
     onRetry: () -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    onOpenPromptLab: () -> Unit = {}
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
     var isSettingsOpen by remember { mutableStateOf(false) }
+    var showSessionConfig by remember { mutableStateOf(false) }
     var isPresetMenuOpen by remember { mutableStateOf(false) }
     var input by remember { mutableStateOf("") }
     var attachments by remember { mutableStateOf(listOf<Attachment>()) }
@@ -169,7 +172,8 @@ fun SedniumApp(
                     onDeleteChat = onDeleteChat,
                     onDeleteMultiple = onDeleteMultipleChats,
                     onRenameChat = onRenameChat,
-                    onTogglePin = onTogglePin
+                    onTogglePin = onTogglePin,
+                    onOpenPromptLab = { onOpenPromptLab(); scope.launch { drawerState.close() } }
                 )
             }
         }
@@ -224,6 +228,7 @@ fun SedniumApp(
                 },
                 onClearClick = onClearCurrentChat,
                 onSettingsClick = { isSettingsOpen = true },
+                onSessionConfigClick = { showSessionConfig = true },
                 onImageClick = { url -> selectedImage = url }
             )
 
@@ -243,6 +248,7 @@ fun SedniumApp(
 
     var showMcpServers by remember { mutableStateOf(false) }
     var showAddMcpServer by remember { mutableStateOf(false) }
+    var showMcpDisclaimer by remember { mutableStateOf(false) }
     var initialMcpName by remember { mutableStateOf("") }
     var initialMcpUrl by remember { mutableStateOf("https://") }
 
@@ -284,21 +290,29 @@ fun SedniumApp(
             com.sednium.localspaces.ui.screens.McpServersScreen(
                 mcpServerManager = mcpServerManager,
                 configs = settings.mcpServers,
-                onAddClick = { 
+                onAddClick = {
                     initialMcpName = ""
                     initialMcpUrl = "https://"
-                    showAddMcpServer = true 
+                    if (settings.mcpDisclaimerAcknowledged) showAddMcpServer = true else showMcpDisclaimer = true
                 },
                 onPresetClick = { name, url ->
                     initialMcpName = name
                     initialMcpUrl = url
-                    showAddMcpServer = true
+                    if (settings.mcpDisclaimerAcknowledged) showAddMcpServer = true else showMcpDisclaimer = true
                 },
                 onRemove = { serverId ->
                     onUpdateSettings(settings.copy(mcpServers = settings.mcpServers.filter { it.id != serverId }))
                     mcpServerManager.disconnect(serverId)
                 },
                 onReconnectAll = { mcpServerManager.reconnectAll(settings.mcpServers) },
+                onToggleTool = { serverId, toolName, enabled ->
+                    val updatedServers = settings.mcpServers.map { server ->
+                        if (server.id != serverId) return@map server
+                        val updatedDisabled = if (enabled) server.disabledTools - toolName else server.disabledTools + toolName
+                        server.copy(disabledTools = updatedDisabled)
+                    }
+                    onUpdateSettings(settings.copy(mcpServers = updatedServers))
+                },
                 onClose = {
                     scope.launch { mcpSheetState.hide() }.invokeOnCompletion {
                         if (!mcpSheetState.isVisible) {
@@ -308,6 +322,18 @@ fun SedniumApp(
                 }
             )
         }
+    }
+
+    if (showSessionConfig && currentChat != null) {
+        com.sednium.localspaces.ui.components.SessionConfigDialog(
+            session = currentChat,
+            globalSettings = settings,
+            onDismiss = { showSessionConfig = false },
+            onSave = { updatedSession ->
+                onUpdateSessionConfig(updatedSession)
+                showSessionConfig = false
+            }
+        )
     }
 
     if (showAddMcpServer) {
@@ -325,6 +351,17 @@ fun SedniumApp(
                 onUpdateSettings(settings.copy(mcpServers = settings.mcpServers + newConfig))
                 mcpServerManager.connect(newConfig)
                 showAddMcpServer = false
+            }
+        )
+    }
+
+    if (showMcpDisclaimer) {
+        com.sednium.localspaces.ui.components.McpDisclaimerDialog(
+            onDismiss = { showMcpDisclaimer = false },
+            onAcknowledge = {
+                onUpdateSettings(settings.copy(mcpDisclaimerAcknowledged = true))
+                showMcpDisclaimer = false
+                showAddMcpServer = true
             }
         )
     }

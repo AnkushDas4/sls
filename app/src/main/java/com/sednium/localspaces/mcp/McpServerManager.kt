@@ -27,8 +27,25 @@ class McpServerManager(
 
     val availableTools: List<QualifiedTool>
         get() = _statuses.value.values.flatMap { info ->
-            info.tools.map { QualifiedTool(serverId = info.config.id, serverName = info.config.name, tool = it) }
+            info.tools
+                .filter { tool -> tool.name !in info.config.disabledTools }
+                .map { QualifiedTool(serverId = info.config.id, serverName = info.config.name, tool = it) }
         }
+
+    /**
+     * Connects every saved server that isn't already connecting/connected.
+     * Intended to be called once on app launch with the persisted
+     * `AppSettings.mcpServers` list, so servers the user previously added
+     * survive a process restart instead of silently going dark.
+     */
+    fun connectSavedServers(configs: List<MCPConfig>) {
+        configs.forEach { config ->
+            val existing = _statuses.value[config.id]
+            if (existing == null || existing.status == McpConnectionStatus.ERROR) {
+                connect(config)
+            }
+        }
+    }
 
     fun connect(config: MCPConfig) {
         _statuses.update { it + (config.id to McpServerStatusInfo(config, McpConnectionStatus.CONNECTING)) }

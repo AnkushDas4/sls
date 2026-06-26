@@ -52,6 +52,9 @@ class MainActivity : FragmentActivity() {
                     var chats by remember { mutableStateOf(initialChats) }
                     var currentChatId by remember { mutableStateOf(chats.firstOrNull()?.id ?: System.currentTimeMillis().toString()) }
                     var isLoading by remember { mutableStateOf(false) }
+                    var showPromptLab by remember { mutableStateOf(false) }
+                    var promptLabOutput by remember { mutableStateOf("") }
+                    var promptLabRunning by remember { mutableStateOf(false) }
 
                     LaunchedEffect(settings) {
                         storage.saveSettings(settings)
@@ -63,12 +66,89 @@ class MainActivity : FragmentActivity() {
 
                     val mcpServerManager = remember { com.sednium.localspaces.mcp.McpServerManager() }
 
+                    LaunchedEffect(Unit) {
+                        // Settings (including mcpServers) are already loaded from
+                        // SharedPreferences via StorageHelper above; the manager
+                        // itself is purely in-memory, so without this the servers
+                        // the user previously added would show as "Error" / blank
+                        // until they manually hit Reconnect All.
+                        if (initialSettings.mcpServers.isNotEmpty()) {
+                            mcpServerManager.connectSavedServers(initialSettings.mcpServers)
+                        }
+                    }
+
+                    if (showPromptLab) {
+                        com.sednium.localspaces.ui.screens.PromptLabScreen(
+                            isRunning = promptLabRunning,
+                            output = promptLabOutput,
+                            isDark = settings.theme == com.sednium.localspaces.model.AppTheme.DARK,
+                            onBack = { showPromptLab = false; promptLabOutput = "" },
+                            onRun = { tool, toolInput ->
+                                promptLabOutput = ""
+                                promptLabRunning = true
+                                scope.launch {
+                                    try {
+                                        val apiKey = com.sednium.localspaces.ui.screens.apiKeyFor(settings)
+                                        if (apiKey.isBlank()) {
+                                            promptLabOutput = "Error: API Key is missing. Please add it in settings."
+                                            return@launch
+                                        }
+                                        generateContentStream(
+                                            apiKey = apiKey,
+                                            modelName = settings.model,
+                                            prompt = toolInput,
+                                            history = emptyList(),
+                                            provider = settings.provider,
+                                            baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
+                                            systemInstruction = tool.systemPrompt,
+                                            temperature = settings.temperature,
+                                            topP = settings.topP,
+                                            topK = settings.topK,
+                                            maxTokens = settings.maxTokens,
+                                            onChunkReceived = { deltaText, _ ->
+                                                promptLabOutput += deltaText
+                                            }
+                                        )
+                                    } catch (e: Exception) {
+                                        promptLabOutput += "\nError: ${e.message}"
+                                    } finally {
+                                        promptLabRunning = false
+                                    }
+                                }
+                            },
+                            onSendToChat = { tool, toolInput, toolOutput ->
+                                val now = System.currentTimeMillis()
+                                val fresh = ChatSession(
+                                    id = now.toString(),
+                                    title = "${tool.label}: ${toolInput.take(30)}",
+                                    messages = listOf(
+                                        ChatMessage(id = now.toString() + "_u", role = Role.USER, content = toolInput),
+                                        ChatMessage(
+                                            id = (now + 1).toString() + "_m",
+                                            role = Role.MODEL,
+                                            content = toolOutput,
+                                            modelName = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.displayName ?: settings.model
+                                        )
+                                    ),
+                                    updatedAt = now
+                                )
+                                chats = listOf(fresh) + chats
+                                currentChatId = fresh.id
+                                showPromptLab = false
+                                promptLabOutput = ""
+                            }
+                        )
+                    } else {
                     SedniumApp(
                         chats = chats,
                         currentChatId = currentChatId,
                         settings = settings,
                         mcpServerManager = mcpServerManager,
                         onUpdateSettings = { settings = it },
+                        onUpdateSessionConfig = { updatedSession ->
+                            chats = chats.map { if (it.id == updatedSession.id) updatedSession else it }
+                        },
+                        onOpenPromptLab = { showPromptLab = true },
                         onSelectChat = { id -> currentChatId = id },
                         onNewChat = {
                             val fresh = ChatSession(
@@ -149,7 +229,11 @@ class MainActivity : FragmentActivity() {
                                         history = historyWithoutLastUser,
                                         provider = settings.provider,
                                         baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
-                                        systemInstruction = settings.systemInstruction,
+                                        systemInstruction = chat.systemInstructionOverride ?: settings.systemInstruction,
+                                        temperature = chat.temperatureOverride ?: settings.temperature,
+                                        topP = chat.topPOverride ?: settings.topP,
+                                        topK = chat.topKOverride ?: settings.topK,
+                                        maxTokens = chat.maxTokensOverride ?: settings.maxTokens,
                                         onChunkReceived = { deltaText, _ ->
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {
@@ -191,7 +275,8 @@ class MainActivity : FragmentActivity() {
                                 isThinking = false
                             )
                             
-                            val activeChatHistory = chats.find { it.id == currentChatId }?.messages ?: emptyList()
+                            val currentChatSession = chats.find { it.id == currentChatId }
+                            val activeChatHistory = currentChatSession?.messages ?: emptyList()
                             
                             chats = chats.map {
                                 if (it.id == currentChatId) it.copy(
@@ -215,7 +300,11 @@ class MainActivity : FragmentActivity() {
                                         history = activeChatHistory,
                                         provider = settings.provider,
                                         baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
-                                        systemInstruction = settings.systemInstruction,
+                                        systemInstruction = currentChatSession?.systemInstructionOverride ?: settings.systemInstruction,
+                                        temperature = currentChatSession?.temperatureOverride ?: settings.temperature,
+                                        topP = currentChatSession?.topPOverride ?: settings.topP,
+                                        topK = currentChatSession?.topKOverride ?: settings.topK,
+                                        maxTokens = currentChatSession?.maxTokensOverride ?: settings.maxTokens,
                                         onChunkReceived = { deltaText, _ ->
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {
@@ -243,6 +332,7 @@ class MainActivity : FragmentActivity() {
                         },
                         isLoading = isLoading
                     )
+                    }
                 }
             }
         }

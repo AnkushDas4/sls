@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -56,7 +58,8 @@ fun ChatListScreen(
     onDeleteChat: (String) -> Unit,
     onDeleteMultiple: (List<String>) -> Unit,
     onRenameChat: (String, String) -> Unit,
-    onTogglePin: (String) -> Unit
+    onTogglePin: (String) -> Unit,
+    onOpenPromptLab: () -> Unit = {}
 ) {
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
@@ -121,6 +124,20 @@ fun ChatListScreen(
         ) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Text(" New Chat", style = MaterialTheme.typography.labelLarge)
+        }
+
+        // --- Prompt Lab entry point: a separate, single-turn workspace
+        // distinct from the chat thread (Summarize / Rewrite / Code Gen). ---
+        androidx.compose.material3.OutlinedButton(
+            onClick = onOpenPromptLab,
+            enabled = !isSelectionMode,
+            shape = RoundedCornerShape(14.dp),
+            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = SedniumColors.Orange),
+            border = androidx.compose.foundation.BorderStroke(1.dp, OrangeAlpha.a30),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(" Prompt Lab", style = MaterialTheme.typography.labelLarge)
         }
 
         // --- Search Bar ---

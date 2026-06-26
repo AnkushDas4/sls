@@ -57,14 +57,27 @@ import kotlinx.serialization.Serializable
     val title: String,
     val messages: List<ChatMessage> = emptyList(),
     val updatedAt: Long,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    // Per-session generation overrides. Null means "inherit the current
+    // global AppSettings value" — these only kick in once a user explicitly
+    // sets them via the session config dialog (gear icon in the chat
+    // TopBar), and only affect this one chat.
+    val temperatureOverride: Float? = null,
+    val topPOverride: Float? = null,
+    val topKOverride: Int? = null,
+    val maxTokensOverride: Int? = null,
+    val systemInstructionOverride: String? = null
 )
 
 @Serializable data class MCPConfig(
     val id: String,
     val name: String,
     val url: String,
-    val authToken: String? = null
+    val authToken: String? = null,
+    // Names of tools (unqualified, as reported by tools/list) that the user has
+    // explicitly disabled for this server. Disabled tools are filtered out of
+    // McpServerManager.availableTools and therefore never offered to the model.
+    val disabledTools: Set<String> = emptySet()
 )
 
 enum class McpConnectionStatus {
@@ -87,6 +100,7 @@ enum class McpConnectionStatus {
     val chatMode: ChatMode = ChatMode.QUICK,
     val enableTools: Boolean = true,
     val mcpServers: List<MCPConfig> = emptyList(),
+    val mcpDisclaimerAcknowledged: Boolean = false,
     val skills: List<Skill> = emptyList(), // Changed to Skill to be serializable safely
     val savedPresets: List<SavedModelPreset> = emptyList(),
     val activePresetId: String? = null,
