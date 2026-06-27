@@ -15,11 +15,96 @@ import androidx.compose.ui.Modifier
 import com.sednium.localspaces.model.AppSettings
 import com.sednium.localspaces.model.ChatMessage
 import com.sednium.localspaces.model.ChatSession
+import com.sednium.localspaces.model.ModelProvider
 import com.sednium.localspaces.model.Role
+import com.sednium.localspaces.model.ToolCallState
+import com.sednium.localspaces.mcp.*
 import com.sednium.localspaces.navigation.SedniumApp
 import com.sednium.localspaces.ui.theme.SedniumTheme
 import kotlinx.coroutines.launch
 import com.sednium.localspaces.api.generateContentStream
+
+/**
+ * Runs one full agentic tool-calling round for a user message: builds the
+ * right ToolCallingChatClient for the active provider, runs it through
+ * ToolCallOrchestrator (send turn -> execute any tool calls via MCP -> feed
+ * results back -> repeat, up to ToolCallPolicy.maxIterations), and reports
+ * live per-call status via onToolCallsUpdated so the existing
+ * ToolActivityView UI lights up exactly the way it already expected to.
+ *
+ * Only the CURRENT user message's tool-call round-trip gets fully structured
+ * history (tool_use/tool_result preserved exactly as each provider needs).
+ * Earlier turns from previous messages in this same chat are passed in as
+ * plain User/Assistant text — a deliberate simplification, since
+ * ChatMessage itself doesn't persist structured tool-call data across app
+ * restarts. This doesn't affect correctness of the round Trip happening
+ * right now, only whether a model can see the exact tool calls it made many
+ * messages ago (it can still see the text content of what happened).
+ */
+private suspend fun runAgenticTurn(
+    mcpServerManager: McpServerManager,
+    provider: ModelProvider,
+    apiKey: String,
+    modelName: String,
+    baseUrl: String,
+    systemInstruction: String,
+    temperature: Float,
+    topP: Float,
+    topK: Int,
+    maxTokens: Int,
+    userMessage: String,
+    priorHistory: List<ChatMessage>,
+    onToolCallsUpdated: (List<ToolCallState>) -> Unit
+): String {
+    val llmClient: ToolCallingChatClient = when (provider) {
+        ModelProvider.GOOGLE -> GeminiToolChatClient(
+            apiKey = apiKey, modelName = modelName, systemInstruction = systemInstruction,
+            temperature = temperature, topP = topP, topK = topK, maxTokens = maxTokens
+        )
+        ModelProvider.ANTHROPIC -> AnthropicToolChatClient(
+            apiKey = apiKey, modelName = modelName, baseUrl = baseUrl, systemInstruction = systemInstruction,
+            temperature = temperature, topP = topP, topK = topK, maxTokens = maxTokens
+        )
+        else -> OpenAiCompatToolChatClient(
+            apiKey = apiKey, modelName = modelName, baseUrl = baseUrl, systemInstruction = systemInstruction,
+            temperature = temperature, topP = topP, maxTokens = maxTokens,
+            isOpenRouter = provider == ModelProvider.OPENROUTER
+        )
+    }
+
+    val toolCallStates = linkedMapOf<String, ToolCallState>()
+
+    val orchestrator = ToolCallOrchestrator(
+        mcpServers = mcpServerManager,
+        llm = llmClient,
+        // No confirmation dialog exists yet for destructive tools (see
+        // README for this batch) — turning this off explicitly rather than
+        // leaving a flag on that looks like it gates something but doesn't,
+        // since the orchestrator's default confirmDestructive lambda
+        // auto-approves regardless.
+        policy = ToolCallPolicy(confirmDestructiveCalls = false),
+        onEvent = { event ->
+            val update: Pair<String, ToolCallState>? = when (event) {
+                is ToolCallEvent.Started -> event.call.callId to ToolCallState(event.call.qualifiedName.substringAfter("::"), isExecuting = true, success = false)
+                is ToolCallEvent.Retrying -> event.call.callId to ToolCallState("${event.call.qualifiedName.substringAfter("::")} (retrying)", isExecuting = true, success = false)
+                is ToolCallEvent.Succeeded -> event.call.callId to ToolCallState(event.call.qualifiedName.substringAfter("::"), isExecuting = false, success = true)
+                is ToolCallEvent.Failed -> event.call.callId to ToolCallState(event.call.qualifiedName.substringAfter("::"), isExecuting = false, success = false)
+                is ToolCallEvent.Declined -> event.call.callId to ToolCallState("${event.call.qualifiedName.substringAfter("::")} (declined)", isExecuting = false, success = false)
+                else -> null
+            }
+            if (update != null) {
+                toolCallStates[update.first] = update.second
+                onToolCallsUpdated(toolCallStates.values.toList())
+            }
+        }
+    )
+
+    val priorTurns: List<LlmChatTurn> = priorHistory.map { msg ->
+        if (msg.role == Role.USER) LlmChatTurn.User(msg.content) else LlmChatTurn.Assistant(msg.content)
+    }
+
+    return orchestrator.run(userMessage, priorTurns)
+}
 
 /**
  * Single-activity host, mirroring the SPA shell index.tsx mounted into.
@@ -229,20 +314,63 @@ class MainActivity : FragmentActivity() {
                                 try {
                                     val apiKey = com.sednium.localspaces.ui.screens.apiKeyFor(settings)
                                     if (apiKey.isBlank()) throw Exception("API Key is missing.")
-                                    generateContentStream(
-                                        apiKey = apiKey,
-                                        modelName = settings.model,
-                                        prompt = lastUserMsg.content,
-                                        history = historyWithoutLastUser,
-                                        provider = settings.provider,
-                                        baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
-                                        systemInstruction = chat.systemInstructionOverride ?: settings.systemInstruction,
-                                        temperature = chat.temperatureOverride ?: settings.temperature,
-                                        topP = chat.topPOverride ?: settings.topP,
-                                        topK = chat.topKOverride ?: settings.topK,
-                                        maxTokens = chat.maxTokensOverride ?: settings.maxTokens,
-                                        attachments = lastUserMsg.attachments,
-                                        onChunkReceived = { deltaText, _ ->
+                                    val effectiveSystemInstruction = chat.systemInstructionOverride ?: settings.systemInstruction
+                                    val effectiveTemp = chat.temperatureOverride ?: settings.temperature
+                                    val effectiveTopP = chat.topPOverride ?: settings.topP
+                                    val effectiveTopK = chat.topKOverride ?: settings.topK
+                                    val effectiveMaxTokens = chat.maxTokensOverride ?: settings.maxTokens
+                                    val resolvedBaseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: ""
+
+                                    if (settings.enableTools && mcpServerManager.availableTools.isNotEmpty()) {
+                                        val finalText = runAgenticTurn(
+                                            mcpServerManager = mcpServerManager,
+                                            provider = settings.provider,
+                                            apiKey = apiKey,
+                                            modelName = settings.model,
+                                            baseUrl = resolvedBaseUrl,
+                                            systemInstruction = effectiveSystemInstruction,
+                                            temperature = effectiveTemp,
+                                            topP = effectiveTopP,
+                                            topK = effectiveTopK,
+                                            maxTokens = effectiveMaxTokens,
+                                            userMessage = lastUserMsg.content,
+                                            priorHistory = historyWithoutLastUser,
+                                            onToolCallsUpdated = { states ->
+                                                chats = chats.map { chat ->
+                                                    if (chat.id == currentChatId) {
+                                                        chat.copy(messages = chat.messages.map { msg ->
+                                                            if (msg.id == modelMsgId) msg.copy(toolCalls = states) else msg
+                                                        })
+                                                    } else chat
+                                                }
+                                            }
+                                        )
+                                        firstTokenTime = System.currentTimeMillis()
+                                        chats = chats.map { chat ->
+                                            if (chat.id == currentChatId) {
+                                                chat.copy(
+                                                    messages = chat.messages.map { msg ->
+                                                        if (msg.id == modelMsgId) msg.copy(content = finalText) else msg
+                                                    },
+                                                    updatedAt = System.currentTimeMillis()
+                                                )
+                                            } else chat
+                                        }
+                                    } else {
+                                        generateContentStream(
+                                            apiKey = apiKey,
+                                            modelName = settings.model,
+                                            prompt = lastUserMsg.content,
+                                            history = historyWithoutLastUser,
+                                            provider = settings.provider,
+                                            baseUrl = resolvedBaseUrl,
+                                            systemInstruction = effectiveSystemInstruction,
+                                            temperature = effectiveTemp,
+                                            topP = effectiveTopP,
+                                            topK = effectiveTopK,
+                                            maxTokens = effectiveMaxTokens,
+                                            attachments = lastUserMsg.attachments,
+                                            onChunkReceived = { deltaText, _ ->
                                             if (firstTokenTime == null && deltaText.isNotEmpty()) {
                                                 firstTokenTime = System.currentTimeMillis()
                                             }
@@ -256,6 +384,7 @@ class MainActivity : FragmentActivity() {
                                             }
                                         }
                                     )
+                                    }
                                     val endTime = System.currentTimeMillis()
                                     val ttft = firstTokenTime ?: endTime
                                     val latency = ttft - startTime
@@ -324,33 +453,82 @@ class MainActivity : FragmentActivity() {
                                     if (apiKey.isBlank()) {
                                         throw Exception("API Key is missing. Please add it in settings.")
                                     }
-                                    generateContentStream(
-                                        apiKey = apiKey,
-                                        modelName = settings.model,
-                                        prompt = text,
-                                        history = activeChatHistory,
-                                        provider = settings.provider,
-                                        baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
-                                        systemInstruction = currentChatSession?.systemInstructionOverride ?: settings.systemInstruction,
-                                        temperature = currentChatSession?.temperatureOverride ?: settings.temperature,
-                                        topP = currentChatSession?.topPOverride ?: settings.topP,
-                                        topK = currentChatSession?.topKOverride ?: settings.topK,
-                                        maxTokens = currentChatSession?.maxTokensOverride ?: settings.maxTokens,
-                                        attachments = attachments,
-                                        onChunkReceived = { deltaText, _ ->
-                                            if (firstTokenTime == null && deltaText.isNotEmpty()) {
-                                                firstTokenTime = System.currentTimeMillis()
+                                    val effectiveSystemInstruction = currentChatSession?.systemInstructionOverride ?: settings.systemInstruction
+                                    val effectiveTemp = currentChatSession?.temperatureOverride ?: settings.temperature
+                                    val effectiveTopP = currentChatSession?.topPOverride ?: settings.topP
+                                    val effectiveTopK = currentChatSession?.topKOverride ?: settings.topK
+                                    val effectiveMaxTokens = currentChatSession?.maxTokensOverride ?: settings.maxTokens
+                                    val resolvedBaseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: ""
+
+                                    if (settings.enableTools && mcpServerManager.availableTools.isNotEmpty()) {
+                                        // --- Agentic tool-calling path ---
+                                        // Non-streaming per turn (the orchestrator needs a
+                                        // complete response to check for tool calls), but tool
+                                        // execution progress still streams live into the
+                                        // existing ToolActivityView via toolCalls updates.
+                                        val finalText = runAgenticTurn(
+                                            mcpServerManager = mcpServerManager,
+                                            provider = settings.provider,
+                                            apiKey = apiKey,
+                                            modelName = settings.model,
+                                            baseUrl = resolvedBaseUrl,
+                                            systemInstruction = effectiveSystemInstruction,
+                                            temperature = effectiveTemp,
+                                            topP = effectiveTopP,
+                                            topK = effectiveTopK,
+                                            maxTokens = effectiveMaxTokens,
+                                            userMessage = text,
+                                            priorHistory = activeChatHistory,
+                                            onToolCallsUpdated = { states ->
+                                                chats = chats.map { chat ->
+                                                    if (chat.id == currentChatId) {
+                                                        chat.copy(messages = chat.messages.map { msg ->
+                                                            if (msg.id == modelMsgId) msg.copy(toolCalls = states) else msg
+                                                        })
+                                                    } else chat
+                                                }
                                             }
-                                            chats = chats.map { chat ->
-                                                if (chat.id == currentChatId) {
-                                                    val newMessages = chat.messages.map { msg ->
-                                                        if (msg.id == modelMsgId) msg.copy(content = msg.content + deltaText) else msg
-                                                    }
-                                                    chat.copy(messages = newMessages, updatedAt = System.currentTimeMillis())
-                                                } else chat
-                                            }
+                                        )
+                                        firstTokenTime = System.currentTimeMillis()
+                                        chats = chats.map { chat ->
+                                            if (chat.id == currentChatId) {
+                                                chat.copy(
+                                                    messages = chat.messages.map { msg ->
+                                                        if (msg.id == modelMsgId) msg.copy(content = finalText) else msg
+                                                    },
+                                                    updatedAt = System.currentTimeMillis()
+                                                )
+                                            } else chat
                                         }
-                                    )
+                                    } else {
+                                        generateContentStream(
+                                            apiKey = apiKey,
+                                            modelName = settings.model,
+                                            prompt = text,
+                                            history = activeChatHistory,
+                                            provider = settings.provider,
+                                            baseUrl = resolvedBaseUrl,
+                                            systemInstruction = effectiveSystemInstruction,
+                                            temperature = effectiveTemp,
+                                            topP = effectiveTopP,
+                                            topK = effectiveTopK,
+                                            maxTokens = effectiveMaxTokens,
+                                            attachments = attachments,
+                                            onChunkReceived = { deltaText, _ ->
+                                                if (firstTokenTime == null && deltaText.isNotEmpty()) {
+                                                    firstTokenTime = System.currentTimeMillis()
+                                                }
+                                                chats = chats.map { chat ->
+                                                    if (chat.id == currentChatId) {
+                                                        val newMessages = chat.messages.map { msg ->
+                                                            if (msg.id == modelMsgId) msg.copy(content = msg.content + deltaText) else msg
+                                                        }
+                                                        chat.copy(messages = newMessages, updatedAt = System.currentTimeMillis())
+                                                    } else chat
+                                                }
+                                            }
+                                        )
+                                    }
                                     // --- Performance Insights ---
                                     // tokensPerSecond is approximate (chars/4 heuristic) since
                                     // these streaming APIs don't report exact per-chunk token

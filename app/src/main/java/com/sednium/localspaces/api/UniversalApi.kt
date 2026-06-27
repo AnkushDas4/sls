@@ -38,7 +38,21 @@ data class Content(
 @Serializable
 data class Part(
     val text: String? = null,
-    val inlineData: InlineData? = null
+    val inlineData: InlineData? = null,
+    val functionCall: FunctionCall? = null,
+    val functionResponse: FunctionResponse? = null
+)
+
+@Serializable
+data class FunctionCall(
+    val name: String,
+    val args: JsonObject = JsonObject(emptyMap())
+)
+
+@Serializable
+data class FunctionResponse(
+    val name: String,
+    val response: JsonObject
 )
 
 @Serializable
@@ -100,6 +114,18 @@ interface UniversalApiService {
         @Query("key") apiKey: String,
         @Body request: GenerateContentRequest
     ): ResponseBody
+
+    // Non-streaming single-turn call, used by the tool-calling orchestrator
+    // (mcp/ProviderToolChatClients.kt) — agentic tool-call turns need one
+    // complete response to inspect for functionCall parts before deciding
+    // what to do next, so streaming deltas don't apply here the way they do
+    // for a normal chat reply.
+    @POST("v1beta/models/{model}:generateContent")
+    suspend fun generateContent(
+        @Path("model") model: String,
+        @Query("key") apiKey: String,
+        @Body request: GenerateContentRequest
+    ): GenerateContentResponse
 }
 
 object RetrofitClient {

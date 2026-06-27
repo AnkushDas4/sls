@@ -30,6 +30,15 @@ data class LlmToolCall(
 sealed class LlmChatTurn {
     data class User(val text: String) : LlmChatTurn()
     data class Assistant(val text: String) : LlmChatTurn()
+    // A turn where the model requested tool call(s) instead of (or alongside)
+    // a plain text reply. Kept as its own case — rather than just folding
+    // `assistantPreface` into a plain Assistant(text) turn — because every
+    // provider needs the exact call id/name/arguments to correctly carry the
+    // conversation forward: Gemini needs functionCall parts in the "model"
+    // turn, Anthropic needs tool_use blocks in the "assistant" turn, OpenAI
+    // needs a tool_calls array on the assistant message. Losing that
+    // structure (as plain text) breaks the follow-up turn for every provider.
+    data class AssistantToolCalls(val text: String?, val calls: List<LlmToolCall>) : LlmChatTurn()
     data class ToolResult(val callId: String, val qualifiedName: String, val content: String, val isError: Boolean) : LlmChatTurn()
 }
 
@@ -71,7 +80,7 @@ class ToolCallOrchestrator(
                 is LlmTurnResult.FinalText -> return turn.content
 
                 is LlmTurnResult.ToolCalls -> {
-                    turn.assistantPreface?.let { history += LlmChatTurn.Assistant(it) }
+                    history += LlmChatTurn.AssistantToolCalls(turn.assistantPreface, turn.calls)
 
                     val groups: Map<Pair<String, JsonObject>, List<LlmToolCall>> =
                         turn.calls.groupBy { it.qualifiedName to it.arguments }
