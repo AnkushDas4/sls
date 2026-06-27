@@ -83,7 +83,7 @@ class MainActivity : FragmentActivity() {
                             output = promptLabOutput,
                             isDark = settings.theme == com.sednium.localspaces.model.AppTheme.DARK,
                             onBack = { showPromptLab = false; promptLabOutput = "" },
-                            onRun = { tool, toolInput ->
+                            onRun = { tool, toolInput, toneInstruction ->
                                 promptLabOutput = ""
                                 promptLabRunning = true
                                 scope.launch {
@@ -93,6 +93,11 @@ class MainActivity : FragmentActivity() {
                                             promptLabOutput = "Error: API Key is missing. Please add it in settings."
                                             return@launch
                                         }
+                                        val effectiveSystemPrompt = if (toneInstruction != null) {
+                                            "${tool.systemPrompt}\n\n$toneInstruction"
+                                        } else {
+                                            tool.systemPrompt
+                                        }
                                         generateContentStream(
                                             apiKey = apiKey,
                                             modelName = settings.model,
@@ -100,7 +105,7 @@ class MainActivity : FragmentActivity() {
                                             history = emptyList(),
                                             provider = settings.provider,
                                             baseUrl = com.sednium.localspaces.model.PROVIDER_CONFIG[settings.provider]?.defaultUrl ?: "",
-                                            systemInstruction = tool.systemPrompt,
+                                            systemInstruction = effectiveSystemPrompt,
                                             temperature = settings.temperature,
                                             topP = settings.topP,
                                             topK = settings.topK,
@@ -219,6 +224,8 @@ class MainActivity : FragmentActivity() {
 
                             isLoading = true
                             scope.launch {
+                                val startTime = System.currentTimeMillis()
+                                var firstTokenTime: Long? = null
                                 try {
                                     val apiKey = com.sednium.localspaces.ui.screens.apiKeyFor(settings)
                                     if (apiKey.isBlank()) throw Exception("API Key is missing.")
@@ -236,6 +243,9 @@ class MainActivity : FragmentActivity() {
                                         maxTokens = chat.maxTokensOverride ?: settings.maxTokens,
                                         attachments = lastUserMsg.attachments,
                                         onChunkReceived = { deltaText, _ ->
+                                            if (firstTokenTime == null && deltaText.isNotEmpty()) {
+                                                firstTokenTime = System.currentTimeMillis()
+                                            }
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {
                                                     val updatedMessages = chat.messages.map { msg ->
@@ -246,6 +256,24 @@ class MainActivity : FragmentActivity() {
                                             }
                                         }
                                     )
+                                    val endTime = System.currentTimeMillis()
+                                    val ttft = firstTokenTime ?: endTime
+                                    val latency = ttft - startTime
+                                    val decodeMs = (endTime - ttft).coerceAtLeast(1)
+                                    chats = chats.map { chat ->
+                                        if (chat.id == currentChatId) {
+                                            val updatedMessages = chat.messages.map { msg ->
+                                                if (msg.id == modelMsgId) {
+                                                    val approxTokens = msg.content.length / 4.0
+                                                    msg.copy(
+                                                        latencyMs = latency,
+                                                        tokensPerSecond = (approxTokens / (decodeMs / 1000.0)).toFloat()
+                                                    )
+                                                } else msg
+                                            }
+                                            chat.copy(messages = updatedMessages)
+                                        } else chat
+                                    }
                                 } catch (e: Exception) {
                                     chats = chats.map { chat ->
                                         if (chat.id == currentChatId) {
@@ -289,6 +317,8 @@ class MainActivity : FragmentActivity() {
 
                             isLoading = true
                             scope.launch {
+                                val startTime = System.currentTimeMillis()
+                                var firstTokenTime: Long? = null
                                 try {
                                     val apiKey = com.sednium.localspaces.ui.screens.apiKeyFor(settings)
                                     if (apiKey.isBlank()) {
@@ -308,6 +338,9 @@ class MainActivity : FragmentActivity() {
                                         maxTokens = currentChatSession?.maxTokensOverride ?: settings.maxTokens,
                                         attachments = attachments,
                                         onChunkReceived = { deltaText, _ ->
+                                            if (firstTokenTime == null && deltaText.isNotEmpty()) {
+                                                firstTokenTime = System.currentTimeMillis()
+                                            }
                                             chats = chats.map { chat ->
                                                 if (chat.id == currentChatId) {
                                                     val newMessages = chat.messages.map { msg ->
@@ -318,6 +351,28 @@ class MainActivity : FragmentActivity() {
                                             }
                                         }
                                     )
+                                    // --- Performance Insights ---
+                                    // tokensPerSecond is approximate (chars/4 heuristic) since
+                                    // these streaming APIs don't report exact per-chunk token
+                                    // counts — see the comment on ChatMessage.tokensPerSecond.
+                                    val endTime = System.currentTimeMillis()
+                                    val ttft = firstTokenTime ?: endTime
+                                    val latency = ttft - startTime
+                                    val decodeMs = (endTime - ttft).coerceAtLeast(1)
+                                    chats = chats.map { chat ->
+                                        if (chat.id == currentChatId) {
+                                            val newMessages = chat.messages.map { msg ->
+                                                if (msg.id == modelMsgId) {
+                                                    val approxTokens = msg.content.length / 4.0
+                                                    msg.copy(
+                                                        latencyMs = latency,
+                                                        tokensPerSecond = (approxTokens / (decodeMs / 1000.0)).toFloat()
+                                                    )
+                                                } else msg
+                                            }
+                                            chat.copy(messages = newMessages)
+                                        } else chat
+                                    }
                                 } catch (e: Exception) {
                                     chats = chats.map { chat ->
                                         if (chat.id == currentChatId) {

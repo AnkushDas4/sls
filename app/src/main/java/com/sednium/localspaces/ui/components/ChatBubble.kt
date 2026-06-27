@@ -65,6 +65,7 @@ fun ChatBubble(
     providerName: String,
     isDark: Boolean,
     isGenerating: Boolean,
+    showPerformanceStats: Boolean = true,
     onImageClick: (String) -> Unit,
     onRetry: (() -> Unit)? = null
 ) {
@@ -113,6 +114,19 @@ fun ChatBubble(
                             style = MaterialTheme.typography.labelSmall,
                             color = SedniumColors.Gray500
                         )
+                        if (showPerformanceStats && !isGenerating && (msg.latencyMs != null || msg.tokensPerSecond != null)) {
+                            val statsText = buildString {
+                                append("· ")
+                                msg.latencyMs?.let { append(String.format("%.1fs", it / 1000.0)) }
+                                if (msg.latencyMs != null && msg.tokensPerSecond != null) append(" · ")
+                                msg.tokensPerSecond?.let { append("~${it.toInt()} tok/s") }
+                            }
+                            Text(
+                                statsText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SedniumColors.Gray500.copy(alpha = 0.7f)
+                            )
+                        }
                         if (msg.isError) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,

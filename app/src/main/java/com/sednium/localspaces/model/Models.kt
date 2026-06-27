@@ -49,7 +49,17 @@ import kotlinx.serialization.Serializable
     val thought: String? = null,
     val isThinking: Boolean = false,
     val toolCalls: List<ToolCallState> = emptyList(),
-    val citations: List<Citation> = emptyList()
+    val citations: List<Citation> = emptyList(),
+    // Performance Insights — populated once a model turn finishes streaming.
+    // latencyMs = time from request sent to first token received (TTFT).
+    // tokensPerSecond is approximate: providers don't return exact token
+    // counts on a per-chunk basis over these streaming APIs, so it's
+    // estimated from response character count (~4 chars/token, a common
+    // rough heuristic for English text) divided by decode time. Treat it as
+    // a relative "which provider/model felt faster" signal, not a precise
+    // figure.
+    val latencyMs: Long? = null,
+    val tokensPerSecond: Float? = null
 )
 
 @Serializable data class ChatSession(
@@ -113,6 +123,7 @@ enum class McpConnectionStatus {
     val maxTokens: Int = 4096,
 
     val enableHistory: Boolean = true,
+    val showPerformanceStats: Boolean = true,
     val historyLimit: Int = 50,
 
     val googleApiKey: String = "",

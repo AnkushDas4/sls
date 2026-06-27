@@ -667,6 +667,16 @@ fun FeaturesGeneralContent(
         checked = settings.enableTools,
         onCheckedChange = { onUpdateSettings(settings.copy(enableTools = it)) }
     )
+
+    HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
+
+    // Performance Insights
+    SettingsSwitchRow(
+        label = "PERFORMANCE INSIGHTS",
+        description = "Show time-to-first-token and approximate tokens/sec under each response.",
+        checked = settings.showPerformanceStats,
+        onCheckedChange = { onUpdateSettings(settings.copy(showPerformanceStats = it)) }
+    )
     
     HorizontalDivider(color = OrangeAlpha.a20, modifier = Modifier.padding(vertical = 12.dp))
     
@@ -806,4 +816,3 @@ fun UsageContent(settings: AppSettings) {
         }
     }
 }
-

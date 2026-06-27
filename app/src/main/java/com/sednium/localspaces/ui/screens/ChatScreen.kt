@@ -387,6 +387,7 @@ fun ChatScreen(
                             providerName = providerName,
                             isDark = false,
                             isGenerating = isLoading && isLast,
+                            showPerformanceStats = settings.showPerformanceStats,
                             onImageClick = onImageClick,
                             onRetry = if (isLast && msg.role == Role.MODEL && !isLoading) onRetry else null
                         )

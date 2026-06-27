@@ -8,14 +8,14 @@ Sednium LocalSpaces is a fully native Jetpack Compose application that connects 
 
 - **Bring Your Own Keys (BYOK)**: Connect directly to providers like Google Gemini, OpenAI, Anthropic Claude, xAI Grok, Groq, OpenRouter, and NVIDIA NIM.
 - **Local & Offline AI**: Seamlessly connect to local model runners like **Ollama** or **LM Studio** via custom base URLs. Keep your data entirely private.
-- **Multimodal Chat**: Attach images and text files directly to your prompts. The app automatically handles formatting for different provider APIs.
-- **Native Voice Input**: Free, on-device voice dictation using Android's native `SpeechRecognizer`. No API costs for voice-to-text.
+- **Multimodal Chat**: Attach images and text files directly to your prompts. The app automatically handles formatting for different provider APIs, including smart vision capability detection and warnings.
+- **Native Voice Input with Live Preview**: Free, on-device voice dictation using Android's native `SpeechRecognizer`. Watch your words transcribe in real-time with live partial-text previews.
 - **Model Context Protocol (MCP)**: Connect to MCP servers to extend your AI's capabilities with external tools and data sources.
 - **Real-time Agent Activity**: Watch the model execute tools and commands in real-time with the built-in Agent Activity overlay.
-- **Prompt Lab**: A dedicated workspace to test system instructions, temperature, and parameters before bringing a prompt into a chat session.
+- **Prompt Lab & Rewrite Tones**: A dedicated workspace to test system instructions. Features a rich 'Rewrite' tool with customizable tones (Professional, Casual, Concise, Persuasive), Summarization, and Code Generation.
+- **Performance Insights**: Track Time-to-First-Token (TTFT) and approximate tokens-per-second decode speeds for every message directly in the chat bubble.
 - **Configurable Presets**: Save your favorite combinations of models, system instructions, and chat modes (Quick, Thinking, Coding) for instant access.
-- **Privacy First**: All your chat histories, API keys, and settings are stored locally on your Android device.
-- **Focus Mode & Chat Export**: Minimize distractions with Focus Mode, and easily export your chat histories to text files.
+- **Privacy First**: All your chat histories, API keys, and settings are stored locally on your Android device behind biometric authentication.
 
 ## 🚀 Getting Started
 
@@ -35,7 +35,7 @@ Sednium LocalSpaces is a fully native Jetpack Compose application that connects 
 
 ## ⚙️ Configuration
 
-LocalSpaces requires API keys to connect to cloud providers. You can add these keys directly within the app's **Settings > API Keys** menu.
+LocalSpaces requires API keys to connect to cloud providers. You can add these keys securely within the app's **Settings > API Keys** menu (protected by device biometrics).
 
 ### Connecting to Local Models (Ollama)
 To connect to an Ollama instance running on your local network:

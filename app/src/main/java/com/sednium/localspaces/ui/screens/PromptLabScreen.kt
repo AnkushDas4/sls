@@ -85,6 +85,15 @@ private fun iconFor(tool: PromptLabTool) = when (tool) {
     PromptLabTool.CODE_GEN -> Icons.Filled.Code
 }
 
+/** Optional tone/style modifier, only shown when Rewrite is the active tool. */
+enum class RewriteTone(val label: String, val instruction: String?) {
+    DEFAULT("Default", null),
+    PROFESSIONAL("Professional", "Use a polished, professional tone suitable for business communication."),
+    CASUAL("Casual", "Use a relaxed, friendly, conversational tone."),
+    CONCISE("Concise", "Be as concise as possible — cut every unnecessary word while preserving the full meaning."),
+    PERSUASIVE("Persuasive", "Use a confident, persuasive tone that makes the strongest possible case.")
+}
+
 /**
  * Prompt Lab — a separate, single-turn workspace distinct from the chat
  * thread. Pick a tool, paste/describe your input, run it once, get a
@@ -98,10 +107,11 @@ fun PromptLabScreen(
     output: String,
     isDark: Boolean,
     onBack: () -> Unit,
-    onRun: (tool: PromptLabTool, input: String) -> Unit,
+    onRun: (tool: PromptLabTool, input: String, toneInstruction: String?) -> Unit,
     onSendToChat: (tool: PromptLabTool, input: String, output: String) -> Unit
 ) {
     var selectedTool by remember { mutableStateOf(PromptLabTool.SUMMARIZE) }
+    var selectedTone by remember { mutableStateOf(RewriteTone.DEFAULT) }
     var input by remember { mutableStateOf("") }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
 
@@ -167,6 +177,32 @@ fun PromptLabScreen(
                 }
             }
 
+            if (selectedTool == PromptLabTool.REWRITE) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(RewriteTone.values().toList()) { tone ->
+                        val selected = tone == selectedTone
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (selected) SedniumColors.Orange.copy(alpha = 0.85f) else OrangeAlpha.a05)
+                                .clickable { selectedTone = tone }
+                                .padding(horizontal = 12.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                tone.label,
+                                color = if (selected) SedniumColors.Milk else SedniumColors.Orange.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -184,7 +220,12 @@ fun PromptLabScreen(
                 )
 
                 Button(
-                    onClick = { if (input.isNotBlank() && !isRunning) onRun(selectedTool, input) },
+                    onClick = {
+                        if (input.isNotBlank() && !isRunning) {
+                            val tone = if (selectedTool == PromptLabTool.REWRITE) selectedTone.instruction else null
+                            onRun(selectedTool, input, tone)
+                        }
+                    },
                     enabled = input.isNotBlank() && !isRunning,
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
