@@ -1,10 +1,12 @@
 package com.sednium.localspaces.mcp
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -19,6 +21,7 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class StreamableHttpTransport(
@@ -33,6 +36,15 @@ class StreamableHttpTransport(
     private var sessionId: String? = null
     private var legacySseMode = false
     private var legacyPostEndpoint: String? = null
+
+    // Legacy HTTP+SSE responses arrive asynchronously on the SSE stream,
+    // not in the POST's own HTTP response body — there's no way to just
+    // return them from the function that sent the request. Every in-flight
+    // request gets a Deferred here, keyed by its JSON-RPC id; the SSE
+    // listener below completes the matching one the moment a response with
+    // that id comes in. Anything that arrives with no matching pending
+    // request (truly unsolicited notifications) still goes to `incoming`.
+    private val pendingLegacyRequests = ConcurrentHashMap<JsonRpcId, CompletableDeferred<JsonRpcResponse>>()
 
     private val incoming = Channel<JsonRpcMessage>(Channel.UNLIMITED)
     private var legacyEventSource: EventSource? = null
@@ -133,34 +145,118 @@ class StreamableHttpTransport(
     private fun parseSingleResponse(text: String): JsonRpcResponse =
         json.decodeFromString(JsonRpcResponse.serializer(), text)
 
-    private fun connectLegacySseAndDiscoverEndpoint() {
-        val latch = java.util.concurrent.CountDownLatch(1)
+    private suspend fun connectLegacySseAndDiscoverEndpoint() {
+        val ready = CompletableDeferred<Unit>()
+        var sawAnyEvent = false
+
         legacyEventSource = EventSources.createFactory(client).newEventSource(
             Request.Builder().url(endpoint).header("Accept", "text/event-stream").build(),
             object : EventSourceListener() {
                 override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                    if (type == "endpoint") {
+                    // The legacy MCP transport's first frame is meant to be
+                    // `event: endpoint` with the POST URL as data. Some
+                    // servers don't set the event name precisely, so as a
+                    // fallback: if this is the very first frame we've seen
+                    // and it clearly isn't JSON-RPC (doesn't parse, and
+                    // looks like a path/URL), treat it as the endpoint too
+                    // rather than silently dropping it and timing out.
+                    val looksLikeEndpoint = type == "endpoint" ||
+                        (!sawAnyEvent && (data.startsWith("/") || data.startsWith("http")) && runCatching {
+                            json.decodeFromString(JsonRpcResponse.serializer(), data)
+                        }.isFailure)
+                    sawAnyEvent = true
+
+                    if (looksLikeEndpoint && legacyPostEndpoint == null) {
                         legacyPostEndpoint = if (data.startsWith("http")) data
                         else endpoint.substringBeforeLast('/') + "/" + data.removePrefix("/")
-                        latch.countDown()
-                    } else {
-                        val parsed = runCatching { json.decodeFromString(JsonRpcResponse.serializer(), data) }.getOrNull()
-                        if (parsed != null) incoming.trySend(JsonRpcMessage.Response(parsed))
+                        ready.complete(Unit)
+                        return
+                    }
+
+                    val parsedResponse = runCatching {
+                        json.decodeFromString(JsonRpcResponse.serializer(), data)
+                    }.getOrNull()
+                    if (parsedResponse != null) {
+                        val pending = pendingLegacyRequests.remove(parsedResponse.id)
+                        if (pending != null) {
+                            pending.complete(parsedResponse)
+                        } else {
+                            incoming.trySend(JsonRpcMessage.Response(parsedResponse))
+                        }
+                        return
+                    }
+                    val parsedNotification = runCatching {
+                        json.decodeFromString(JsonRpcNotification.serializer(), data)
+                    }.getOrNull()
+                    if (parsedNotification != null) {
+                        incoming.trySend(JsonRpcMessage.Notification(parsedNotification))
+                    }
+                }
+
+                override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                    if (!ready.isCompleted) {
+                        ready.completeExceptionally(
+                            McpTransportException("Legacy SSE connection to $endpoint failed: ${t?.message ?: response?.code}")
+                        )
+                    }
+                }
+
+                override fun onClosed(eventSource: EventSource) {
+                    if (!ready.isCompleted) {
+                        ready.completeExceptionally(McpTransportException("Legacy SSE stream closed before sending an endpoint event"))
                     }
                 }
             }
         )
-        latch.await(10, TimeUnit.SECONDS)
+
+        withTimeoutOrNull(15_000) { ready.await() }
+        // No explicit failure handling needed here: if `ready` never
+        // completed, legacyPostEndpoint stays null and the caller
+        // (requestViaLegacySse) reports that clearly instead of timing out
+        // silently the way the old CountDownLatch version did.
     }
 
-    private fun requestViaLegacySse(req: JsonRpcRequest): JsonRpcResponse {
-        val target = legacyPostEndpoint ?: throw McpTransportException("Legacy SSE endpoint not yet discovered")
-        val bodyJson = json.encodeToString(JsonRpcRequest.serializer(), req)
-        val httpResponse = client.newCall(
-            Request.Builder().url(target).post(bodyJson.toRequestBody("application/json".toMediaType())).build()
-        ).execute()
-        httpResponse.close()
-        throw McpTransportException("Legacy HTTP+SSE servers should be awaited via `incomingMessages`, not this call path")
+    private suspend fun requestViaLegacySse(req: JsonRpcRequest): JsonRpcResponse {
+        if (legacyPostEndpoint == null) {
+            // Either this is the very first legacy request and discovery
+            // hasn't run yet, or a prior discovery attempt failed/timed
+            // out — retry rather than permanently failing every request
+            // for the rest of this transport's lifetime.
+            connectLegacySseAndDiscoverEndpoint()
+        }
+        val target = legacyPostEndpoint
+            ?: throw McpTransportException(
+                "Legacy SSE endpoint not yet discovered: the server never sent an 'endpoint' event within 15s of connecting to $endpoint"
+            )
+
+        val deferred = CompletableDeferred<JsonRpcResponse>()
+        pendingLegacyRequests[req.id] = deferred
+
+        try {
+            val bodyJson = json.encodeToString(JsonRpcRequest.serializer(), req)
+            val httpResponse = try {
+                client.newCall(
+                    Request.Builder().url(target).post(bodyJson.toRequestBody("application/json".toMediaType())).build()
+                ).execute()
+            } catch (e: IOException) {
+                throw McpTransportException("Network error posting to legacy endpoint $target: ${e.message}", e)
+            }
+            if (!httpResponse.isSuccessful) {
+                val errBody = httpResponse.body?.string()
+                httpResponse.close()
+                throw McpTransportException("HTTP ${httpResponse.code} posting to legacy endpoint $target: $errBody")
+            }
+            httpResponse.close()
+
+            // The actual JSON-RPC result for this specific request doesn't
+            // come back in the POST's own response — it arrives
+            // asynchronously as a `data:` event on the SSE stream already
+            // being read above, which completes `deferred` by matching id.
+            return withTimeoutOrNull(30_000) { deferred.await() }
+                ?: throw McpTransportException("Timed out waiting for a legacy SSE response to '${req.method}'")
+        } finally {
+            pendingLegacyRequests.remove(req.id)
+        }
     }
 
     fun close() {
