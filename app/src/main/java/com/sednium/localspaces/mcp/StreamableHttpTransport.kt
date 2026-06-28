@@ -67,6 +67,12 @@ class StreamableHttpTransport(
             .url(endpoint)
             .post(bodyJson.toRequestBody("application/json".toMediaType()))
             .header("Accept", "application/json, text/event-stream")
+            // Some MCP servers sit behind a CDN/WAF that blocks generic
+            // HTTP-client default user agents outright (commonly returned
+            // as a blanket 403/404/405 before the request ever reaches the
+            // server's actual MCP routing) — identify honestly rather than
+            // looking like an anonymous bot.
+            .header("User-Agent", "Sednium-Oorty-MCP-Client/1.0")
 
         sessionId?.let { requestBuilder.header("Mcp-Session-Id", it) }
         if (!isInitialize) requestBuilder.header("MCP-Protocol-Version", MCP_PROTOCOL_VERSION)
@@ -79,10 +85,41 @@ class StreamableHttpTransport(
         }
 
         if (isInitialize && httpResponse.code in intArrayOf(400, 404, 405)) {
+            // A 405 here is ambiguous: it could genuinely mean "this server
+            // only speaks the legacy HTTP+SSE transport", or it could mean
+            // something entirely unrelated rejected the request before it
+            // ever reached real MCP routing (auth, a WAF, a strict
+            // protocol-version check) on a server that's actually modern
+            // Streamable HTTP. Capture the real reason now, so if the
+            // legacy attempt below ALSO fails — which it will, for a
+            // server that was never legacy-only — the error that surfaces
+            // is the original, actionable one instead of a confusing
+            // second-order failure about SSE discovery.
+            val originalBody = httpResponse.body?.string()
+            val originalCode = httpResponse.code
             httpResponse.close()
-            legacySseMode = true
-            connectLegacySseAndDiscoverEndpoint()
-            return@withContext requestViaLegacySse(req)
+
+            val legacyResult = runCatching {
+                legacySseMode = true
+                connectLegacySseAndDiscoverEndpoint()
+                requestViaLegacySse(req)
+            }
+
+            if (legacyResult.isSuccess) {
+                return@withContext legacyResult.getOrThrow()
+            }
+
+            // Legacy didn't pan out either — this almost certainly wasn't
+            // a legacy-only server to begin with. Don't leave this
+            // transport permanently stuck assuming legacy for every future
+            // call; surface the original failure, which is the one most
+            // likely to actually explain what's wrong.
+            legacySseMode = false
+            legacyPostEndpoint = null
+            throw McpTransportException(
+                "HTTP $originalCode from $endpoint: ${originalBody ?: "(empty body)"} " +
+                    "[legacy HTTP+SSE fallback also failed: ${legacyResult.exceptionOrNull()?.message}]"
+            )
         }
 
         if (!httpResponse.isSuccessful) {
@@ -111,6 +148,7 @@ class StreamableHttpTransport(
         val requestBuilder = Request.Builder()
             .url(if (legacySseMode) (legacyPostEndpoint ?: endpoint) else endpoint)
             .post(bodyJson.toRequestBody("application/json".toMediaType()))
+            .header("User-Agent", "Sednium-Oorty-MCP-Client/1.0")
         sessionId?.let { requestBuilder.header("Mcp-Session-Id", it) }
         requestBuilder.header("MCP-Protocol-Version", MCP_PROTOCOL_VERSION)
         authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
@@ -150,7 +188,10 @@ class StreamableHttpTransport(
         var sawAnyEvent = false
 
         legacyEventSource = EventSources.createFactory(client).newEventSource(
-            Request.Builder().url(endpoint).header("Accept", "text/event-stream").build(),
+            Request.Builder().url(endpoint)
+                .header("Accept", "text/event-stream")
+                .header("User-Agent", "Sednium-Oorty-MCP-Client/1.0")
+                .build(),
             object : EventSourceListener() {
                 override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
                     // The legacy MCP transport's first frame is meant to be
@@ -234,10 +275,13 @@ class StreamableHttpTransport(
 
         try {
             val bodyJson = json.encodeToString(JsonRpcRequest.serializer(), req)
+            val legacyPostBuilder = Request.Builder()
+                .url(target)
+                .post(bodyJson.toRequestBody("application/json".toMediaType()))
+                .header("User-Agent", "Sednium-Oorty-MCP-Client/1.0")
+            authToken?.let { legacyPostBuilder.header("Authorization", "Bearer $it") }
             val httpResponse = try {
-                client.newCall(
-                    Request.Builder().url(target).post(bodyJson.toRequestBody("application/json".toMediaType())).build()
-                ).execute()
+                client.newCall(legacyPostBuilder.build()).execute()
             } catch (e: IOException) {
                 throw McpTransportException("Network error posting to legacy endpoint $target: ${e.message}", e)
             }

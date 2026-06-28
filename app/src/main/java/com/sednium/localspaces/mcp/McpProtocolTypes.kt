@@ -4,7 +4,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-const val MCP_PROTOCOL_VERSION = "2025-11-25"
+// "2025-06-18" is the version Context7's own server reports back in its
+// initialize response as of this writing — using a version string no real
+// server has confirmed support for risks exactly the kind of silent
+// rejection (some gateways/routers 405 on a protocol version they don't
+// recognize as a valid route) that "Legacy SSE endpoint not yet discovered"
+// turned out to be a symptom of.
+const val MCP_PROTOCOL_VERSION = "2025-06-18"
 
 @Serializable
 data class Implementation(
