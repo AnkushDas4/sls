@@ -143,7 +143,18 @@ class StreamableHttpTransport(
         }
     }
 
-    fun sendNotification(notification: JsonRpcNotification) {
+    /**
+     * Was previously fire-and-forget (`.enqueue`), which raced against
+     * whatever request the caller sent immediately after — typically
+     * `tools/list` right after `initialize()` returns. Several real MCP
+     * servers (anything built on the official SDKs, including Context7)
+     * strictly enforce "no requests before notifications/initialized is
+     * received" and respond to that race with a 400 + a custom JSON-RPC
+     * error code. Making this suspend and actually executing the call
+     * before returning means the notification has genuinely been sent by
+     * the time the caller's next request goes out.
+     */
+    suspend fun sendNotification(notification: JsonRpcNotification) = withContext(Dispatchers.IO) {
         val bodyJson = json.encodeToString(JsonRpcNotification.serializer(), notification)
         val requestBuilder = Request.Builder()
             .url(if (legacySseMode) (legacyPostEndpoint ?: endpoint) else endpoint)
@@ -152,7 +163,14 @@ class StreamableHttpTransport(
         sessionId?.let { requestBuilder.header("Mcp-Session-Id", it) }
         requestBuilder.header("MCP-Protocol-Version", MCP_PROTOCOL_VERSION)
         authToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
-        client.newCall(requestBuilder.build()).enqueue(NoopCallback)
+        try {
+            client.newCall(requestBuilder.build()).execute().close()
+        } catch (e: IOException) {
+            // Notifications don't get a JSON-RPC response either way and
+            // nothing downstream is waiting on a result — but don't let a
+            // network blip here silently vanish without even a log trace.
+            throw McpTransportException("Failed to send notification '${notification.method}' to $endpoint: ${e.message}", e)
+        }
     }
 
     private fun readSseUntilMatchingResponse(response: Response, expectedId: JsonRpcId): JsonRpcResponse {
@@ -306,11 +324,6 @@ class StreamableHttpTransport(
     fun close() {
         legacyEventSource?.cancel()
         incoming.close()
-    }
-
-    private object NoopCallback : okhttp3.Callback {
-        override fun onFailure(call: okhttp3.Call, e: IOException) { }
-        override fun onResponse(call: okhttp3.Call, response: Response) { response.close() }
     }
 }
 
